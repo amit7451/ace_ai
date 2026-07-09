@@ -3,7 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '.',
-  testMatch: ['<rootDir>/tests/**/*.spec.ts'],
+  testMatch: ['<rootDir>/ai-core/tests/**/*.test.ts', '<rootDir>/ai-core/tests/**/*.spec.ts'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/index.ts'],
   coverageDirectory: 'coverage',
   clearMocks: true,

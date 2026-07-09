@@ -1,2 +1,2 @@
 export * from './vector-store.errors';
-export * from './status-map';
+export { mapHttpStatusToError as mapVectorStoreHttpStatusToError } from './status-map';
