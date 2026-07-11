@@ -1,0 +1,21 @@
+{
+  "name": "@ion-ai/parser",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0",
+    "cheerio": "^1.0.0-rc.12",
+    "remark": "^15.0.1",
+    "remark-strip-html": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.4",
+    "typescript": "^5.5.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@ion-ai/logger",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "pino": "^9.2.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^11.2.1",
+    "typescript": "^5.5.3"
+  }
+}

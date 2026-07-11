@@ -1,0 +1,36 @@
+{
+  "name": "@ion-ai/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^9.3.1",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "@ion-ai/auth": "workspace:*",
+    "@ion-ai/chat": "workspace:*",
+    "@ion-ai/config": "workspace:*",
+    "@ion-ai/contracts": "workspace:*",
+    "@ion-ai/database": "workspace:*",
+    "@ion-ai/logger": "workspace:*",
+    "@ion-ai/queue": "workspace:*",
+    "@ion-ai/storage": "workspace:*",
+    "fastify": "^4.27.0",
+    "fastify-plugin": "^6.0.0",
+    "uuid": "^14.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/uuid": "^11.0.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}

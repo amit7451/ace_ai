@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  image         String?
+  googleId      String?   @unique
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships   OrganizationMember[]
+}
+
+model Organization {
+  id            String    @id @default(uuid())
+  name          String
+  slug          String    @unique
+  logo          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  members          OrganizationMember[]
+  configuration    OrganizationConfiguration?
+  auditLogs        AuditLog[]
+  knowledgeSources KnowledgeSource[]
+  crawlJobs        CrawlJob[]
+  deployments      Deployment[]
+  visitorSessions  VisitorSession[]
+  conversations    Conversation[]
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           MemberRole
+  status         MemberStatus
+  joinedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum MemberStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model OrganizationConfiguration {
+  organizationId    String   @id
+  llmProvider       String   @default("openai")
+  embeddingProvider String   @default("openai")
+  temperature       Float    @default(0.7)
+  systemPrompt      String?
+  welcomeMessage    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  action         String
+  actorId        String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// -----------------------------------------
+// Phase 2: Knowledge Platform Models
+// -----------------------------------------
+
+model KnowledgeSource {
+  id             String       @id @default(uuid())
+  organizationId String
+  status         KnowledgeStatus @default(PENDING)
+  sourceType     SourceType
+  createdBy      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document       Document?
+  ingestionJobs  IngestionJob[]
+}
+
+enum KnowledgeStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum SourceType {
+  PDF
+  DOCX
+  TXT
+  MARKDOWN
+  WEBSITE
+}
+
+model Document {
+  id                String          @id @default(uuid())
+  knowledgeSourceId String          @unique
+  storageKey        String
+  mimeType          String
+  sizeBytes         Int
+  hashSha256        String
+  createdAt         DateTime        @default(now())
+
+  knowledgeSource   KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+  chunks            Chunk[]
+}
+
+model Chunk {
+  id         String   @id @default(uuid())
+  documentId String
+  chunkIndex Int
+  tokenCount Int
+  vectorId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model CrawlJob {
+  id             String       @id @default(uuid())
+  organizationId String
+  url            String
+  status         JobStatus    @default(PENDING)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  pagesCrawled   Int          @default(0)
+  errorDetails   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model IngestionJob {
+  id                String          @id @default(uuid())
+  knowledgeSourceId String
+  currentStage      String          // e.g. UPLOADED, PARSING, CHUNKING, EMBEDDING, COMPLETED
+  progress          Int             @default(0)
+  status            JobStatus       @default(PENDING)
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  retryCount        Int             @default(0)
+  failureReason     String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  knowledgeSource   KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// -----------------------------------------
+// Phase 3: Chat Platform Models
+// -----------------------------------------
+
+model Deployment {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  environment    String       @default("production")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  widgets        Widget[]
+  conversations  Conversation[]
+}
+
+model Widget {
+  id             String       @id @default(uuid())
+  deploymentId   String       @unique
+  publicKey      String       @unique
+  theme          Json?        
+  branding       Json?        
+  position       String       @default("bottom-right")
+  enabled        Boolean      @default(true)
+  allowedDomains String[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  deployment     Deployment   @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+}
+
+model VisitorSession {
+  id             String       @id @default(uuid())
+  organizationId String
+  ipHash         String
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  lastSeen       DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations  Conversation[]
+}
+
+model Conversation {
+  id             String         @id @default(uuid())
+  organizationId String
+  deploymentId   String?
+  visitorId      String?
+  status         ConversationStatus @default(ACTIVE)
+  startedAt      DateTime       @default(now())
+  lastActivity   DateTime       @default(now())
+  metadata       Json?
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deployment     Deployment?    @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+  visitor        VisitorSession? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  messages       Message[]
+}
+
+enum ConversationStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  role           MessageRole
+  content        String       @db.Text
+  model          String?
+  provider       String?
+  promptTokens   Int?
+  completionTokens Int?
+  totalTokens    Int?
+  responseTimeMs Int?
+  citations      Json?
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}

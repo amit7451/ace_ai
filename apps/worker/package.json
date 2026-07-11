@@ -1,0 +1,26 @@
+{
+  "name": "@ion-ai/worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@ion-ai/storage": "workspace:*",
+    "@ion-ai/parser": "workspace:*",
+    "@ion-ai/queue": "workspace:*",
+    "@ion-ai/database": "workspace:*",
+    "@ion-ai/config": "workspace:*",
+    "@ion-ai/logger": "workspace:*",
+    "@ai-chatbot-platform/ai-core": "workspace:*",
+    "bullmq": "^5.8.0",
+    "ioredis": "^5.4.1",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "@types/node": "^20.14.9"
+  }
+}

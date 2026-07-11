@@ -1,0 +1,31 @@
+{
+  "name": "@ai-chatbot-platform/ai-core",
+  "version": "0.5.0",
+  "description": "Provider-agnostic AI core engine for the AI Chatbot SaaS Platform. Components 1-5: LLM Provider Layer, Embedding Provider Layer, Vector Store Layer (Qdrant), Knowledge Chunking & Processing, RAG Retriever Engine.",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@google/genai": "^2.10.0",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.9",
+    "dotenv": "^17.4.2",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.5",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  }
+}
