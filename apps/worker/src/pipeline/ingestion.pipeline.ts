@@ -7,6 +7,7 @@ import {
   VectorStoreProviderFactory,
 } from '@ai-chatbot-platform/ai-core';
 import { UploadJobPayload } from '@ion-ai/queue';
+import { env } from '@ion-ai/config';
 
 export class IngestionPipeline {
   constructor(
@@ -69,12 +70,14 @@ export class IngestionPipeline {
       const orgConfig = await prisma.organizationConfiguration.findUnique({
         where: { organizationId: job.organizationId },
       });
-      const providerName = orgConfig?.embeddingProvider ?? 'openai';
-      // In production, we'd pass api keys securely. Assuming env vars for now.
+      const providerName = (orgConfig?.embeddingProvider ?? 'openai') as 'openai' | 'gemini';
+      const model = providerName === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
+      const apiKey = providerName === 'gemini' ? env.GEMINI_API_KEY : env.OPENAI_API_KEY;
+
       const embedder = EmbeddingProviderFactory.create({
-        provider: providerName as any,
-        model: 'text-embedding-3-small',
-        apiKey: process.env.OPENAI_API_KEY ?? '',
+        provider: providerName,
+        model,
+        apiKey: apiKey ?? '',
       });
 
       const chunkTexts = chunks.map((c) => c.text);
@@ -156,6 +159,78 @@ export class IngestionPipeline {
         },
       });
       await prisma.knowledgeSource.update({
+        where: { id: job.knowledgeSourceId },
+        data: { status: 'FAILED' },
+      });
+      throw error;
+    }
+  }
+
+  async processDeleteJob(
+    job: {
+      organizationId: string;
+      knowledgeSourceId: string;
+      documentId: string;
+      storageKey: string;
+    },
+    jobId: string
+  ) {
+    console.log(`Starting delete job for ${job.documentId} in org ${job.organizationId}`);
+    try {
+      // 1. Delete from R2 Storage
+      try {
+        console.log(`Deleting from R2: ${job.storageKey}`);
+        await this.storageProvider.delete(job.storageKey);
+        console.log(`Successfully deleted from R2: ${job.storageKey}`);
+      } catch (e: any) {
+        console.error(`R2 Deletion Error:`, e);
+        throw e;
+      }
+
+      // 2. Delete from Qdrant Vector Store
+      try {
+        const collectionName = `org_${job.organizationId.replace(/-/g, '_')}`;
+        const vectorStore = VectorStoreProviderFactory.create({
+          provider: 'qdrant',
+          url: this.qdrantUrl,
+        });
+
+        // Get chunks to find vector IDs
+        const chunks = await prisma.chunk.findMany({
+          where: { documentId: job.documentId },
+          select: { vectorId: true },
+        });
+        const vectorIds = chunks.map((c) => c.vectorId).filter(Boolean) as string[];
+
+        if (vectorIds.length > 0) {
+          await vectorStore.delete(collectionName, vectorIds);
+        }
+      } catch (e: any) {
+        console.error(`Qdrant Deletion Error:`, e);
+        throw e;
+      }
+
+      // 3. Delete from Postgres
+      // Due to cascade delete settings, deleting the KnowledgeSource might delete Document and Chunks automatically.
+      // But let's safely delete them in order if cascade isn't set up.
+      await prisma.chunk.deleteMany({
+        where: { documentId: job.documentId },
+      });
+      await prisma.document.deleteMany({
+        where: { id: job.documentId },
+      });
+      await prisma.ingestionJob.deleteMany({
+        where: { knowledgeSourceId: job.knowledgeSourceId },
+      });
+      await prisma.knowledgeSource.deleteMany({
+        where: { id: job.knowledgeSourceId },
+      });
+
+      console.log(`Deletion completed for ${job.documentId}`);
+    } catch (error: any) {
+      console.error(`Deletion failed for ${job.documentId}:`, error);
+      // Mark as failed deletion so the user knows it didn't fully delete
+      await prisma.knowledgeSource.updateMany({
         where: { id: job.knowledgeSourceId },
         data: { status: 'FAILED' },
       });

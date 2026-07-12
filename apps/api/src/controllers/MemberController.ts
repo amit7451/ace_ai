@@ -28,4 +28,47 @@ export async function memberController(fastify: FastifyInstance) {
     );
     return result;
   });
+
+  fastify.delete('/:userId', async (request: FastifyRequest, reply) => {
+    const { userId } = request.params as { userId: string };
+    const { memberRole, organization } = request;
+
+    if (memberRole !== 'OWNER' && memberRole !== 'ADMIN') {
+      return reply
+        .status(403)
+        .send({ success: false, error: 'Forbidden. Only OWNER or ADMIN can remove members.' });
+    }
+
+    if (userId === request.user.sub) {
+      return reply.status(400).send({ success: false, error: 'Cannot remove yourself' });
+    }
+
+    const memberRepository = (await import('../di')).memberRepository;
+
+    const existingMember = await memberRepository.findByUserAndOrganization(
+      userId,
+      organization!.id
+    );
+    if (!existingMember) {
+      return reply
+        .status(404)
+        .send({ success: false, error: 'Member not found in this organization' });
+    }
+
+    if (existingMember.role === 'OWNER') {
+      return reply.status(403).send({ success: false, error: 'Cannot remove an OWNER' });
+    }
+
+    const { prisma } = await import('@ion-ai/database');
+    await prisma.organizationMember.delete({
+      where: {
+        organizationId_userId: {
+          organizationId: organization!.id,
+          userId,
+        },
+      },
+    });
+
+    return { success: true, message: 'Member removed successfully' };
+  });
 }

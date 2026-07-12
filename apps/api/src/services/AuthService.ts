@@ -23,7 +23,7 @@ export class AuthService {
     });
 
     await this.organizationService.createOrganization(user.id, {
-      name: `${data.name}'s Organization`,
+      name: data.organizationName,
     });
 
     return { id: user.id, email: user.email, name: user.name };

@@ -15,6 +15,11 @@ export class BullMQProvider implements IQueueProvider {
     this.redisConfig = redisConfig;
   }
 
+  async isPaused(queueName: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    return queue.isPaused();
+  }
+
   private getQueue(queueName: string): Queue {
     if (!this.queues.has(queueName)) {
       const queueOptions: QueueOptions = {
@@ -41,5 +46,29 @@ export class BullMQProvider implements IQueueProvider {
     const queue = this.getQueue(queueName);
     const job = await queue.add(jobName, data);
     return job.id!;
+  }
+
+  async pause(queueName: string): Promise<void> {
+    const queue = this.getQueue(queueName);
+    await queue.pause();
+  }
+
+  async resume(queueName: string): Promise<void> {
+    const queue = this.getQueue(queueName);
+    await queue.resume();
+  }
+
+  async cleanFailed(queueName: string): Promise<void> {
+    const queue = this.getQueue(queueName);
+    // clean 1000 failed jobs, wait 10s grace period
+    await queue.clean(0, 1000, 'failed');
+  }
+
+  async removeJob(queueName: string, jobId: string): Promise<void> {
+    const queue = this.getQueue(queueName);
+    const job = await queue.getJob(jobId);
+    if (job) {
+      await job.remove();
+    }
   }
 }

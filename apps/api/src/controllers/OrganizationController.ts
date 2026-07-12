@@ -21,7 +21,7 @@ export async function organizationController(fastify: FastifyInstance) {
   fastify.register(async (orgRoutes) => {
     orgRoutes.addHook('preHandler', orgRoutes.requireOrganization);
 
-    orgRoutes.get('/:id', async (request: FastifyRequest) => {
+    orgRoutes.get('/:orgId', async (request: FastifyRequest) => {
       // request.organization is populated by requireOrganization hook
       return { success: true, data: request.organization };
     });

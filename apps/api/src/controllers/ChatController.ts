@@ -81,6 +81,8 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
       reply.raw.setHeader('Content-Type', 'text/event-stream');
       reply.raw.setHeader('Cache-Control', 'no-cache');
       reply.raw.setHeader('Connection', 'keep-alive');
+      reply.raw.setHeader('Access-Control-Allow-Origin', request.headers.origin || '*');
+      reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
 
       const stream = await chatService.streamChat(organizationId, conversationId, message);
 

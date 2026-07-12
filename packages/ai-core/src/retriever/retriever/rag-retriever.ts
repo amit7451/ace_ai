@@ -57,50 +57,65 @@ export class RagRetriever implements IRetriever {
     const start = Date.now();
     const query = retrievalQuerySchema.parse(rawQuery);
 
-    await this.ensureDimensionsVerified();
+    try {
+      await this.ensureDimensionsVerified();
 
-    const embedResult = await this.embeddingProvider.embed(query.query, { inputType: 'query' });
-    const queryVector = embedResult.embeddings[0].embedding;
+      const embedResult = await this.embeddingProvider.embed(query.query, { inputType: 'query' });
+      const queryVector = embedResult.embeddings[0].embedding;
 
-    const topK = query.topK ?? this.config.topK;
-    const scoreThreshold = query.scoreThreshold ?? this.config.scoreThreshold;
-    const maxContextTokens = query.maxContextTokens ?? this.config.maxContextTokens;
-    const filter = buildTenantFilter(query.tenantId, query.assistantId, query.filter);
-    const searchTopK = Math.max(
-      topK * SEARCH_OVER_FETCH_MULTIPLIER,
-      topK + SEARCH_OVER_FETCH_MINIMUM
-    );
+      const topK = query.topK ?? this.config.topK;
+      const scoreThreshold = query.scoreThreshold ?? this.config.scoreThreshold;
+      const maxContextTokens = query.maxContextTokens ?? this.config.maxContextTokens;
+      const filter = buildTenantFilter(query.tenantId, query.assistantId, query.filter);
+      const searchTopK = Math.max(
+        topK * SEARCH_OVER_FETCH_MULTIPLIER,
+        topK + SEARCH_OVER_FETCH_MINIMUM
+      );
 
-    const candidates = await this.vectorStore.search<KnowledgeVectorPayload>(
-      this.config.collection,
-      {
-        vector: queryVector,
-        topK: searchTopK,
-        filter,
-        withPayload: true,
-        withVector: this.strategy.requiresVectors,
+      const candidates = await this.vectorStore.search<KnowledgeVectorPayload>(
+        this.config.collection,
+        {
+          vector: queryVector,
+          topK: searchTopK,
+          filter,
+          withPayload: true,
+          withVector: this.strategy.requiresVectors,
+        }
+      );
+
+      const reranked = this.strategy.rerank(candidates, {
+        queryVector,
+        scoreThreshold,
+        topK,
+        mmrLambda: this.config.mmrLambda,
+        distanceMetric: this.distanceMetric,
+      });
+
+      const deduped = deduplicateByText(reranked);
+      const finalResults = maxContextTokens
+        ? trimToTokenBudget(deduped, maxContextTokens)
+        : deduped;
+      const chunks: RetrievedChunk[] = finalResults.map((result) => this.toRetrievedChunk(result));
+
+      return {
+        query: query.query,
+        chunks,
+        isRelevant: chunks.length > 0,
+        totalCandidates: candidates.length,
+        tookMs: Date.now() - start,
+      };
+    } catch (err: any) {
+      if (err.name === 'VectorStoreNotFoundError') {
+        return {
+          query: query.query,
+          chunks: [],
+          isRelevant: false,
+          totalCandidates: 0,
+          tookMs: Date.now() - start,
+        };
       }
-    );
-
-    const reranked = this.strategy.rerank(candidates, {
-      queryVector,
-      scoreThreshold,
-      topK,
-      mmrLambda: this.config.mmrLambda,
-      distanceMetric: this.distanceMetric,
-    });
-
-    const deduped = deduplicateByText(reranked);
-    const finalResults = maxContextTokens ? trimToTokenBudget(deduped, maxContextTokens) : deduped;
-    const chunks: RetrievedChunk[] = finalResults.map((result) => this.toRetrievedChunk(result));
-
-    return {
-      query: query.query,
-      chunks,
-      isRelevant: chunks.length > 0,
-      totalCandidates: candidates.length,
-      tookMs: Date.now() - start,
-    };
+      throw err;
+    }
   }
 
   /** Never throws — returns `false` on any embedding or vector store failure, same contract as `IVectorStore.healthCheck()`. */

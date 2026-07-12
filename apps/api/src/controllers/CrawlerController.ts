@@ -17,4 +17,44 @@ export async function crawlerController(fastify: FastifyInstance) {
     // Placeholder for crawler creation logic
     return { success: true, data: { message: 'Crawler endpoint registered' } };
   });
+
+  fastify.post('/:id/retry', async (request: FastifyRequest, reply) => {
+    const { id } = request.params as { id: string };
+
+    const crawler = await prisma.crawlJob.findUnique({
+      where: { id },
+    });
+
+    if (!crawler || crawler.organizationId !== request.organization!.id) {
+      return reply.status(404).send({ success: false, error: 'Crawler job not found' });
+    }
+
+    if (crawler.status !== 'FAILED') {
+      return reply
+        .status(400)
+        .send({ success: false, error: 'Only failed crawlers can be retried' });
+    }
+
+    // Re-enqueue job
+    const { queueProvider } = await import('../di');
+    const { QueueName, JobName } = await import('@ion-ai/queue');
+
+    await queueProvider.addJob(QueueName.CRAWLER, JobName.CRAWL, {
+      organizationId: request.organization!.id,
+      crawlJobId: crawler.id,
+      url: crawler.url,
+    });
+
+    // Reset status
+    await prisma.crawlJob.update({
+      where: { id },
+      data: {
+        status: 'PENDING',
+        errorDetails: null,
+        pagesCrawled: 0,
+      },
+    });
+
+    return { success: true };
+  });
 }

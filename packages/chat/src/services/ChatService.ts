@@ -21,30 +21,55 @@ export class ChatService {
       throw new Error('Organization configuration not found');
     }
 
+    const llmProvider = (orgConfig.llmProvider || 'openai') as any;
+    const llmApiKey =
+      llmProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
+    const llmModel = llmProvider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini';
+
+    console.log(`[ChatService] Initializing LLM: provider=${llmProvider}, model=${llmModel}`);
+
     const llm = LLMProviderFactory.create({
-      provider: 'openai',
-      apiKey: process.env.OPENAI_API_KEY as string,
-      model: orgConfig.llmProvider,
+      provider: llmProvider,
+      apiKey: llmApiKey as string,
+      model: llmModel,
     });
+
+    const embedderProvider = (orgConfig.embeddingProvider || 'openai') as any;
+    const embedderApiKey =
+      embedderProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
+    const embedderModel =
+      embedderProvider === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
+
+    console.log(
+      `[ChatService] Initializing Embedder: provider=${embedderProvider}, model=${embedderModel}`
+    );
+
     const embedder = EmbeddingProviderFactory.create({
-      provider: 'openai',
-      apiKey: process.env.OPENAI_API_KEY as string,
-      model: 'text-embedding-3-small',
+      provider: embedderProvider,
+      apiKey: embedderApiKey as string,
+      model: embedderModel,
     });
+
     const vectorStore = VectorStoreProviderFactory.create({
       provider: 'qdrant',
       url: env.QDRANT_URL as string,
       apiKey: process.env.QDRANT_API_KEY as string,
     });
 
+    const collectionName = `org_${organizationId.replace(/-/g, '_')}`;
+
     const retriever = new RagRetriever(embedder, vectorStore, {
       topK: 5,
       scoreThreshold: 0.7,
-      collection: `org_${organizationId}`,
+      collection: collectionName,
     });
     const memory = new PrismaMemoryProvider();
+
     const promptBuilder = new RagPromptBuilder({
       systemPrompt: orgConfig.systemPrompt || 'You are a helpful AI assistant.',
+      fallbackStrategy: 'instruct_llm',
+      fallbackInstruction:
+        'The provided context does not contain information relevant to this query. If the user is just saying a basic greeting (like hello, hi, hey) or conversational pleasantry, respond normally and politely as an AI assistant. Otherwise, politely inform them that you do not have enough context to answer their specific question.',
     });
 
     return new RagOrchestrator(retriever, memory, promptBuilder, llm);

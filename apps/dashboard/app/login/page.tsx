@@ -28,17 +28,7 @@ export default function LoginPage() {
         throw new Error(data.error?.message || 'Login failed');
       }
 
-      // Fetch organization context
-      const orgRes = await fetch('http://localhost:3001/api/v1/organizations', {
-        credentials: 'include',
-      });
-      const orgData = await orgRes.json();
-
-      if (orgData.success && orgData.data.length > 0) {
-        localStorage.setItem('organizationId', orgData.data[0].id);
-      }
-
-      router.push('/playground');
+      router.push('/select-org');
     } catch (err: any) {
       setError(err.message);
     } finally {

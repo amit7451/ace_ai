@@ -106,6 +106,7 @@ export class RagOrchestrator implements IAIOrchestrator {
         { role: 'assistant', content: fullContent },
       ]);
     } catch (err) {
+      console.error('[RagOrchestrator] Stream error:', err);
       if (err instanceof OrchestratorError) {
         yield { type: 'error', error: err.message };
       } else {

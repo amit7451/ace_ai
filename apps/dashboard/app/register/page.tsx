@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function RegisterPage() {
       const res = await fetch('http://localhost:3001/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, organizationName }),
         credentials: 'include',
       });
       const data = await res.json();
@@ -29,17 +30,7 @@ export default function RegisterPage() {
         throw new Error(data.error?.message || 'Registration failed');
       }
 
-      // Fetch organization context
-      const orgRes = await fetch('http://localhost:3001/api/v1/organizations', {
-        credentials: 'include',
-      });
-      const orgData = await orgRes.json();
-
-      if (orgData.success && orgData.data.length > 0) {
-        localStorage.setItem('organizationId', orgData.data[0].id);
-      }
-
-      router.push('/playground');
+      router.push('/select-org');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -70,6 +61,16 @@ export default function RegisterPage() {
                 placeholder="Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Organization Name"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
               />
             </div>
             <div>

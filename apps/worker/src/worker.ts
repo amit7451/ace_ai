@@ -2,31 +2,32 @@ import { Worker, Job } from 'bullmq';
 import { QueueName, JobName, UploadJobPayload } from '@ion-ai/queue';
 import { R2StorageProvider } from '@ion-ai/storage';
 import { IngestionPipeline } from './pipeline/ingestion.pipeline';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { env } from '@ion-ai/config';
 
 export class WorkerApplication {
   private worker: Worker;
   private ingestionPipeline: IngestionPipeline;
 
   constructor() {
+    console.log('[DEBUG] process.cwd() =', process.cwd());
+    console.log('[DEBUG] env.R2_ACCOUNT_ID =', env.R2_ACCOUNT_ID);
+
     const storageProvider = new R2StorageProvider({
-      accountId: process.env.R2_ACCOUNT_ID ?? '',
-      accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
-      bucketName: process.env.R2_BUCKET_NAME ?? 'ion-ai-knowledge',
+      accountId: env.R2_ACCOUNT_ID ?? '',
+      accessKeyId: env.R2_ACCESS_KEY_ID ?? '',
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY ?? '',
+      bucketName: env.R2_BUCKET_NAME ?? 'ion-ai-knowledge',
     });
 
     this.ingestionPipeline = new IngestionPipeline(
       storageProvider,
-      process.env.QDRANT_URL ?? 'http://localhost:6333'
+      env.QDRANT_URL ?? 'http://localhost:6333'
     );
 
     this.worker = new Worker(QueueName.INGESTION, this.processJob.bind(this), {
       connection: {
-        host: process.env.REDIS_HOST ?? 'localhost',
-        port: Number(process.env.REDIS_PORT ?? 6379),
+        host: env.REDIS_HOST ?? 'localhost',
+        port: Number(env.REDIS_PORT ?? 6379),
       },
       concurrency: 5,
     });
@@ -43,6 +44,8 @@ export class WorkerApplication {
   private async processJob(job: Job) {
     if (job.name === JobName.UPLOAD) {
       await this.ingestionPipeline.processUploadJob(job.data as UploadJobPayload, job.id!);
+    } else if (job.name === JobName.DELETE) {
+      await this.ingestionPipeline.processDeleteJob(job.data as any, job.id!);
     } else {
       console.warn(`Unknown job name: ${job.name}`);
     }

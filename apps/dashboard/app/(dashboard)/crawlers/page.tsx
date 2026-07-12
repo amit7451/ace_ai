@@ -47,6 +47,28 @@ export default function CrawlersPage() {
     }
   };
 
+  const handleRetry = async (id: string) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/v1/crawlers/${id}/retry`, {
+        method: 'POST',
+        headers: {
+          'x-organization-id': localStorage.getItem('organizationId') || '',
+        },
+        credentials: 'include',
+      });
+      const json = await response.json();
+      if (json.success) {
+        alert('Retry initiated successfully.');
+        fetchCrawlers();
+      } else {
+        alert('Failed to retry: ' + json.error?.message);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to trigger retry.');
+    }
+  };
+
   useEffect(() => {
     fetchCrawlers();
   }, []);
@@ -82,10 +104,16 @@ export default function CrawlersPage() {
                 Base URL
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Pages Crawled
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Created
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Actions
               </th>
             </tr>
           </thead>
@@ -93,23 +121,50 @@ export default function CrawlersPage() {
             {crawlers.map((c) => (
               <tr key={c.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {c.baseUrl}
+                  {c.url}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {c.pagesCrawled || 0}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">
                   <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${c.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}
+                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      c.status === 'COMPLETED'
+                        ? 'bg-green-100 text-green-800'
+                        : c.status === 'FAILED'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                    }`}
                   >
                     {c.status}
                   </span>
+                  {c.status === 'FAILED' && c.errorDetails && (
+                    <div
+                      className="mt-1 text-xs text-red-500 truncate max-w-[200px]"
+                      title={c.errorDetails}
+                    >
+                      {c.errorDetails}
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(c.createdAt).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  {c.status === 'FAILED' && (
+                    <button
+                      onClick={() => handleRetry(c.id)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Retry
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
             {crawlers.length === 0 && !loading && (
               <tr>
-                <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   No crawlers active.
                 </td>
               </tr>
