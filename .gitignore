@@ -127,3 +127,5 @@ packages/database/prisma/*.db-journal
 # IDEs
 .idea/
 .vscode/
+*.zip
+ion-ai.zip

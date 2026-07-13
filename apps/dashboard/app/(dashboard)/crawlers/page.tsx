@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function CrawlersPage() {
   const [crawlers, setCrawlers] = useState<any[]>([]);
@@ -69,8 +69,13 @@ export default function CrawlersPage() {
     }
   };
 
+  const initialFetchDone = useRef(false);
+
   useEffect(() => {
-    fetchCrawlers();
+    if (!initialFetchDone.current) {
+      initialFetchDone.current = true;
+      fetchCrawlers();
+    }
   }, []);
 
   return (
