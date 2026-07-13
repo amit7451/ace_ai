@@ -68,8 +68,12 @@ export class ChatService {
     const promptBuilder = new RagPromptBuilder({
       systemPrompt: orgConfig.systemPrompt || 'You are a helpful AI assistant.',
       fallbackStrategy: 'instruct_llm',
-      fallbackInstruction:
-        'The provided context does not contain information relevant to this query. If the user is just saying a basic greeting (like hello, hi, hey) or conversational pleasantry, respond normally and politely as an AI assistant. Otherwise, politely inform them that you do not have enough context to answer their specific question.',
+      fallbackInstruction: `STRICT DOMAIN GUARDRAIL: No relevant context was found in the knowledge base for the user's latest query. 
+You MUST NOT use your pre-trained world knowledge to answer questions about sports, news, history, or general trivia. 
+Your ONLY allowed actions are:
+1. If the user's query can be confidently answered using ONLY the provided Conversation History, you may answer it.
+2. If the user is just saying a basic greeting (like hello, hi, hey), respond normally.
+3. OTHERWISE, you MUST politely decline to answer and state that you do not have the provided context to answer.`,
     });
 
     return new RagOrchestrator(retriever, memory, promptBuilder, llm);

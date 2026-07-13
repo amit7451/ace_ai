@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function WidgetsPage() {
   const [widgets, setWidgets] = useState<any[]>([]);
@@ -41,8 +41,13 @@ export default function WidgetsPage() {
     }
   };
 
+  const initialFetchDone = useRef(false);
+
   useEffect(() => {
-    fetchWidgets();
+    if (!initialFetchDone.current) {
+      initialFetchDone.current = true;
+      fetchWidgets();
+    }
   }, []);
 
   return (

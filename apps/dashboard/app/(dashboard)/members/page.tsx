@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface Member {
   id: string; // the organizationMember ID or user ID?
@@ -27,9 +27,14 @@ export default function MembersPage() {
 
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
+  const initialFetchDone = useRef(false);
+
   useEffect(() => {
-    fetchMe();
-    fetchMembers();
+    if (!initialFetchDone.current) {
+      initialFetchDone.current = true;
+      fetchMe();
+      fetchMembers();
+    }
   }, []);
 
   const fetchMe = async () => {

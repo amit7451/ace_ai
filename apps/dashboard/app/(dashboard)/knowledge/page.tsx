@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function KnowledgePage() {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [activeJobs, setActiveJobs] = useState<Record<string, any>>({});
+  const previousJobsRef = useRef<Record<string, any>>({});
+  const initialFetchDone = useRef(false);
 
   const fetchSources = async () => {
     try {
@@ -100,9 +103,75 @@ export default function KnowledgePage() {
   };
 
   useEffect(() => {
-    fetchSources();
-    const interval = setInterval(fetchSources, 5000); // Auto refresh for status updates
-    return () => clearInterval(interval);
+    // ONE initial fetch
+    if (!initialFetchDone.current) {
+      initialFetchDone.current = true;
+      fetchSources();
+    }
+
+    const orgId = localStorage.getItem('organizationId') || '';
+    if (!orgId) return;
+
+    let eventSource: EventSource;
+    let isFirstPush = true; // Use local variable for the closure
+
+    try {
+      eventSource = new EventSource(`http://localhost:3001/api/v1/jobs/stream?orgId=${orgId}`, {
+        withCredentials: true,
+      });
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'update' && Array.isArray(data.jobs)) {
+            const newJobsMap: Record<string, any> = {};
+            let needsRefetch = false;
+
+            data.jobs.forEach((job: any) => {
+              if (job.knowledgeSourceId) {
+                newJobsMap[job.knowledgeSourceId] = job;
+
+                const prevJob = previousJobsRef.current[job.knowledgeSourceId];
+                // Invalidate cache and refetch if a job status transitioned to COMPLETED or FAILED
+                // BUT skip this check on the very first SSE push since we already did an initial fetch!
+                if (!isFirstPush) {
+                  if (
+                    (!prevJob && (job.status === 'COMPLETED' || job.status === 'FAILED')) ||
+                    (prevJob &&
+                      prevJob.status !== job.status &&
+                      (job.status === 'COMPLETED' || job.status === 'FAILED'))
+                  ) {
+                    needsRefetch = true;
+                  }
+                }
+              }
+            });
+
+            isFirstPush = false;
+            setActiveJobs(newJobsMap);
+            previousJobsRef.current = newJobsMap;
+
+            if (needsRefetch) {
+              fetchSources();
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE', e);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error('EventSource failed:', err);
+      };
+    } catch (err) {
+      console.error('Failed to init EventSource', err);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, []);
 
   const formatSize = (bytes?: number) => {
@@ -165,51 +234,79 @@ export default function KnowledgePage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {sources.map((s) => (
-              <tr key={s.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {extractFilename(s.document?.storageKey)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {s.sourceType}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatSize(s.document?.sizeBytes)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      s.status === 'COMPLETED'
-                        ? 'bg-green-100 text-green-800'
-                        : s.status === 'FAILED'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                  >
-                    {s.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(s.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium space-x-4">
-                  {s.status === 'FAILED' && (
+            {sources.map((s) => {
+              const activeJob = activeJobs[s.id];
+              // Use live SSE status if it exists, otherwise use database status
+              const displayStatus = activeJob ? activeJob.status : s.status;
+              const displayProgress = activeJob ? activeJob.progress : 0;
+              const isRunning = displayStatus === 'RUNNING' || displayStatus === 'PENDING';
+
+              return (
+                <tr key={s.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {extractFilename(s.document?.storageKey)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {s.sourceType}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatSize(s.document?.sizeBytes)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div className="flex flex-col space-y-1">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full w-fit ${
+                          displayStatus === 'COMPLETED'
+                            ? 'bg-green-100 text-green-800'
+                            : displayStatus === 'FAILED'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
+                        {displayStatus}
+                      </span>
+                      {isRunning && activeJob?.currentStage && (
+                        <span className="text-[10px] font-medium text-gray-500">
+                          {activeJob.currentStage}
+                        </span>
+                      )}
+                      {isRunning && displayProgress > 0 && (
+                        <div className="flex items-center space-x-2 mt-1">
+                          <div className="w-24 bg-gray-200 rounded-full h-1.5 overflow-hidden flex items-center">
+                            <div
+                              className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                              style={{ width: `${displayProgress}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-[10px] font-semibold text-blue-600">
+                            {displayProgress}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(s.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium space-x-4">
+                    {displayStatus === 'FAILED' && (
+                      <button
+                        onClick={() => handleRetry(s.id)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        Retry
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleRetry(s.id)}
-                      className="text-blue-600 hover:text-blue-900"
+                      onClick={() => handleDelete(s.id)}
+                      className="text-red-600 hover:text-red-900"
                     >
-                      Retry
+                      Delete
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(s.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
             {sources.length === 0 && !loading && (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-gray-500">

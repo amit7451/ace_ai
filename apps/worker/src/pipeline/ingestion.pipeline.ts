@@ -104,18 +104,20 @@ export class IngestionPipeline {
         distance: 'cosine',
       });
 
-      const vectors = chunks.map((c, i) => ({
-        id: c.chunkId,
-        vector: embeddings.embeddings[i].embedding,
-        payload: {
-          organizationId: job.organizationId,
-          knowledgeSourceId: job.knowledgeSourceId,
-          documentId: job.documentId,
-          chunkIndex: c.chunkIndex,
-          text: c.text,
-          metadata: c.metadata,
-        },
-      }));
+      const vectors = chunks.map((c, i) => {
+        const { metadata, ...core } = c;
+        const payload = metadata ? { ...core, ...metadata } : { ...core };
+
+        return {
+          id: c.chunkId,
+          vector: embeddings.embeddings[i].embedding,
+          payload: {
+            ...payload,
+            organizationId: job.organizationId,
+            knowledgeSourceId: job.knowledgeSourceId,
+          },
+        };
+      });
 
       await vectorStore.upsertBatch(collectionName, vectors);
 
