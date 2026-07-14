@@ -70,12 +70,34 @@ export class IngestionPipeline {
       const orgConfig = await prisma.organizationConfiguration.findUnique({
         where: { organizationId: job.organizationId },
       });
-      const providerName = (orgConfig?.embeddingProvider ?? 'openai') as 'openai' | 'gemini';
-      const model = providerName === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
-      const apiKey = providerName === 'gemini' ? env.GEMINI_API_KEY : env.OPENAI_API_KEY;
+      const providerNameRaw = (orgConfig?.embeddingProvider ?? 'openai') as string;
+      let providerName = providerNameRaw;
+      let model = 'text-embedding-3-small';
+      let apiKey = '';
+
+      if (providerNameRaw === 'testing') {
+        providerName = 'gemini';
+        model = 'gemini-embedding-001';
+        apiKey = env.GEMINI_API_KEY || '';
+      } else {
+        const apiKeyRecord = await prisma.organizationApiKey.findUnique({
+          where: {
+            organizationId_provider: {
+              organizationId: job.organizationId,
+              provider: providerNameRaw,
+            },
+          },
+        });
+        if (!apiKeyRecord) {
+          throw new Error(`API key for embedding provider '${providerNameRaw}' is not configured.`);
+        }
+        const { decryptApiKey } = await import('@ion-ai/config');
+        apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+        model = providerNameRaw === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
+      }
 
       const embedder = EmbeddingProviderFactory.create({
-        provider: providerName,
+        provider: providerName as any,
         model,
         apiKey: apiKey ?? '',
       });
@@ -129,7 +151,7 @@ export class IngestionPipeline {
             chunkIndex: vector.payload.chunkIndex as number,
             tokenCount: chunks[vector.payload.chunkIndex as number].tokenCount,
             vectorId: vector.id,
-            metadata: (vector.payload.metadata as any) ?? {},
+            metadata: ((vector.payload as any).metadata as any) ?? {},
           },
         });
       }

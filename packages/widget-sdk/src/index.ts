@@ -67,8 +67,25 @@ export class IonWidget {
     this.inputEl = this.containerEl.querySelector('.ion-widget-input') as HTMLInputElement;
     this.sendBtn = this.containerEl.querySelector('.ion-widget-send') as HTMLButtonElement;
 
-    // Default welcome message
-    this.addMessage('assistant', 'Hi there! How can I help you today?');
+    // Fetch config and set welcome message
+    this.fetchWidgetConfig();
+  }
+
+  private async fetchWidgetConfig() {
+    try {
+      const response = await fetch(
+        `${this.config.apiBaseUrl}/chat/config?widgetKey=${this.config.widgetKey}`
+      );
+      const data = await response.json();
+      const welcomeMsg =
+        data.success && data.data.welcomeMessage
+          ? data.data.welcomeMessage
+          : 'Hi there! How can I help you today?';
+      this.addMessage('assistant', welcomeMsg);
+    } catch (err) {
+      console.error('Failed to fetch widget config', err);
+      this.addMessage('assistant', 'Hi there! How can I help you today?');
+    }
   }
 
   private attachListeners() {

@@ -5,8 +5,8 @@ export const ConversationController: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
   fastify.addHook('preHandler', fastify.requireOrganization);
 
-  fastify.get('/api/v1/conversations', async (request, reply) => {
-    const { organizationId } = request as any;
+  fastify.get('/', async (request, reply) => {
+    const organizationId = request.organization!.id;
 
     const conversations = await prisma.conversation.findMany({
       where: { organizationId },
@@ -16,8 +16,8 @@ export const ConversationController: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: conversations });
   });
 
-  fastify.get('/api/v1/conversations/:id', async (request, reply) => {
-    const { organizationId } = request as any;
+  fastify.get('/:id', async (request, reply) => {
+    const organizationId = request.organization!.id;
     const { id } = request.params as { id: string };
 
     const conversation = await prisma.conversation.findUnique({

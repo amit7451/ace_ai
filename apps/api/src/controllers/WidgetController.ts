@@ -7,8 +7,8 @@ export const WidgetController: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
   fastify.addHook('preHandler', fastify.requireOrganization);
 
-  fastify.post('/api/v1/widgets', async (request, reply) => {
-    const { organizationId } = request as any;
+  fastify.post('/', async (request, reply) => {
+    const organizationId = request.organization!.id;
     const schema = z.object({
       allowedDomains: z.array(z.string()).optional(),
     });
@@ -28,8 +28,8 @@ export const WidgetController: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true, data: widget });
   });
 
-  fastify.get('/api/v1/widgets', async (request, reply) => {
-    const { organizationId } = request as any;
+  fastify.get('/', async (request, reply) => {
+    const organizationId = request.organization!.id;
 
     const deployment = await deploymentService.getDeploymentForOrganization(organizationId);
     if (!deployment) return reply.send({ success: true, data: [] });

@@ -31,6 +31,7 @@ model Organization {
 
   members          OrganizationMember[]
   configuration    OrganizationConfiguration?
+  apiKeys          OrganizationApiKey[]
   auditLogs        AuditLog[]
   knowledgeSources KnowledgeSource[]
   crawlJobs        CrawlJob[]
@@ -73,12 +74,28 @@ model OrganizationConfiguration {
   llmProvider       String   @default("openai")
   embeddingProvider String   @default("openai")
   temperature       Float    @default(0.7)
-  systemPrompt      String?
+  maxTokens         Int?
+  topK              Int      @default(5)
+  scoreThreshold    Float    @default(0.7)
+  systemPrompt      String?  @db.Text
   welcomeMessage    String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model OrganizationApiKey {
+  id             String   @id @default(uuid())
+  organizationId String
+  provider       String
+  encryptedKey   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
 }
 
 model AuditLog {

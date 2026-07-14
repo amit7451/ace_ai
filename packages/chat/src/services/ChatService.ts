@@ -12,7 +12,7 @@ import { PrismaMemoryProvider } from './PrismaMemoryProvider';
 import { env } from '@ion-ai/config';
 
 export class ChatService {
-  async createOrchestrator(organizationId: string) {
+  async createOrchestrator(organizationId: string, context: 'playground' | 'widget') {
     const orgConfig = await prisma.organizationConfiguration.findUnique({
       where: { organizationId },
     });
@@ -21,32 +21,71 @@ export class ChatService {
       throw new Error('Organization configuration not found');
     }
 
-    const llmProvider = (orgConfig.llmProvider || 'openai') as any;
-    const llmApiKey =
-      llmProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
-    const llmModel = llmProvider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini';
+    const llmProvider = (orgConfig.llmProvider || 'openai') as string;
+    let llmApiKey: string;
+    let llmProviderName = llmProvider;
+    let llmModel = 'gpt-4o-mini';
 
-    console.log(`[ChatService] Initializing LLM: provider=${llmProvider}, model=${llmModel}`);
+    if (llmProvider === 'testing') {
+      if (context === 'widget') {
+        throw new Error(
+          'The "testing" provider is only available in the playground. Please configure your own API key for live widgets.'
+        );
+      }
+      llmProviderName = 'gemini';
+      llmApiKey = process.env.GEMINI_API_KEY || '';
+      llmModel = 'gemini-2.5-flash';
+    } else {
+      const apiKeyRecord = await prisma.organizationApiKey.findUnique({
+        where: { organizationId_provider: { organizationId, provider: llmProvider } },
+      });
+      if (!apiKeyRecord) {
+        throw new Error(`API key for provider '${llmProvider}' is not configured.`);
+      }
+      const { decryptApiKey } = await import('@ion-ai/config');
+      llmApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      llmModel = llmProvider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini';
+    }
+
+    console.log(`[ChatService] Initializing LLM: provider=${llmProviderName}, model=${llmModel}`);
 
     const llm = LLMProviderFactory.create({
-      provider: llmProvider,
-      apiKey: llmApiKey as string,
+      provider: llmProviderName as any,
+      apiKey: llmApiKey,
       model: llmModel,
+      temperature: orgConfig.temperature ?? 0.7,
+      maxTokens: orgConfig.maxTokens ?? undefined,
     });
 
-    const embedderProvider = (orgConfig.embeddingProvider || 'openai') as any;
-    const embedderApiKey =
-      embedderProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
-    const embedderModel =
-      embedderProvider === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
+    const embedderProvider = (orgConfig.embeddingProvider || 'openai') as string;
+    let embedderApiKey: string;
+    let embedderProviderName = embedderProvider;
+    let embedderModel = 'text-embedding-3-small';
+
+    if (embedderProvider === 'testing') {
+      embedderProviderName = 'gemini';
+      embedderApiKey = process.env.GEMINI_API_KEY || '';
+      embedderModel = 'gemini-embedding-001';
+    } else {
+      const apiKeyRecord = await prisma.organizationApiKey.findUnique({
+        where: { organizationId_provider: { organizationId, provider: embedderProvider } },
+      });
+      if (!apiKeyRecord) {
+        throw new Error(`API key for embedding provider '${embedderProvider}' is not configured.`);
+      }
+      const { decryptApiKey } = await import('@ion-ai/config');
+      embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      embedderModel =
+        embedderProvider === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
+    }
 
     console.log(
-      `[ChatService] Initializing Embedder: provider=${embedderProvider}, model=${embedderModel}`
+      `[ChatService] Initializing Embedder: provider=${embedderProviderName}, model=${embedderModel}`
     );
 
     const embedder = EmbeddingProviderFactory.create({
-      provider: embedderProvider,
-      apiKey: embedderApiKey as string,
+      provider: embedderProviderName as any,
+      apiKey: embedderApiKey,
       model: embedderModel,
     });
 
@@ -59,8 +98,8 @@ export class ChatService {
     const collectionName = `org_${organizationId.replace(/-/g, '_')}`;
 
     const retriever = new RagRetriever(embedder, vectorStore, {
-      topK: 5,
-      scoreThreshold: 0.7,
+      topK: orgConfig.topK ?? 5,
+      scoreThreshold: orgConfig.scoreThreshold ?? 0.7,
       collection: collectionName,
     });
     const memory = new PrismaMemoryProvider();
@@ -82,16 +121,23 @@ Your ONLY allowed actions are:
   async streamChat(
     organizationId: string,
     conversationId: string,
-    query: string
-  ): Promise<AsyncGenerator<ChatStreamChunk>> {
-    const orchestrator = await this.createOrchestrator(organizationId);
-
-    return orchestrator.stream({
-      tenantId: organizationId,
-      assistantId: 'default',
-      sessionId: conversationId,
-      query,
+    query: string,
+    context: 'playground' | 'widget'
+  ): Promise<{ stream: AsyncGenerator<ChatStreamChunk>; welcomeMessage?: string }> {
+    const orchestrator = await this.createOrchestrator(organizationId, context);
+    const orgConfig = await prisma.organizationConfiguration.findUnique({
+      where: { organizationId },
     });
+
+    return {
+      stream: orchestrator.stream({
+        tenantId: organizationId,
+        assistantId: 'default',
+        sessionId: conversationId,
+        query,
+      }),
+      welcomeMessage: orgConfig?.welcomeMessage || 'Hi there! How can I help you today?',
+    };
   }
 }
 

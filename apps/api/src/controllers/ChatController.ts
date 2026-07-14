@@ -84,10 +84,19 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
       reply.raw.setHeader('Access-Control-Allow-Origin', request.headers.origin || '*');
       reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
 
-      const stream = await chatService.streamChat(organizationId, conversationId, message);
+      const chatResult = await chatService.streamChat(
+        organizationId,
+        conversationId,
+        message,
+        widgetKey ? 'widget' : 'playground'
+      );
+      const stream = chatResult.stream;
+      const welcomeMessage = chatResult.welcomeMessage;
 
       // Send conversation ID first so client knows it
-      reply.raw.write(`data: ${JSON.stringify({ type: 'metadata', conversationId })}\n\n`);
+      reply.raw.write(
+        `data: ${JSON.stringify({ type: 'metadata', conversationId, welcomeMessage })}\n\n`
+      );
 
       for await (const chunk of stream) {
         reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
@@ -108,6 +117,29 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
 
     if (isStreaming) {
       return reply;
+    }
+  });
+
+  fastify.get('/config', async (request, reply) => {
+    const { widgetKey } = request.query as { widgetKey?: string };
+    if (!widgetKey) {
+      return reply.status(400).send({ success: false, error: 'Missing widgetKey' });
+    }
+
+    try {
+      const widget = await widgetService.validateWidgetKey(widgetKey, request.headers.origin);
+      const orgConfig = await prisma.organizationConfiguration.findUnique({
+        where: { organizationId: widget.deployment.organizationId },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          welcomeMessage: orgConfig?.welcomeMessage || 'Hi there! How can I help you today?',
+        },
+      });
+    } catch (err: any) {
+      return reply.status(400).send({ success: false, error: err.message });
     }
   });
 };

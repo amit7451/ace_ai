@@ -1,14 +1,28 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/';
   const isWidgetPage = pathname.startsWith('/chat/'); // Hosted widget page
 
   if (isAuthPage || isWidgetPage) return null;
+
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:3001/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      localStorage.removeItem('organizationId');
+      router.push('/login');
+    } catch (err) {
+      console.error('Logout failed', err);
+    }
+  };
 
   const navItems = [
     { name: 'Playground', href: '/playground' },
@@ -17,6 +31,7 @@ export default function Sidebar() {
     { name: 'Ingestion Jobs', href: '/jobs' },
     { name: 'Members', href: '/members' },
     { name: 'Widgets', href: '/widgets' },
+    { name: 'Settings', href: '/settings' },
   ];
 
   return (
@@ -34,12 +49,12 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="p-4 border-t text-sm text-gray-500">
-        <Link
-          href="/login"
-          className="block px-4 py-2 rounded hover:bg-gray-100 text-red-600 font-medium text-center"
+        <button
+          onClick={handleLogout}
+          className="w-full block px-4 py-2 rounded hover:bg-gray-100 text-red-600 font-medium text-center"
         >
           Sign Out
-        </Link>
+        </button>
       </div>
     </aside>
   );
