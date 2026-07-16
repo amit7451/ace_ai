@@ -1,16 +1,19 @@
-import { prisma } from '@ion-ai/database';
 import { IStorageProvider } from '@ion-ai/storage';
 import { IQueueProvider, QueueName, JobName, UploadJobPayload } from '@ion-ai/queue';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
+import { KnowledgeRepository } from '../repositories/KnowledgeRepository';
+import { JobRepository } from '../repositories/JobRepository';
 
 export class KnowledgeService {
   constructor(
     private storageProvider: IStorageProvider,
     private queueProvider: IQueueProvider,
-    private auditLogRepo: AuditLogRepository
+    private auditLogRepo: AuditLogRepository,
+    private knowledgeRepo: KnowledgeRepository,
+    private jobRepo: JobRepository
   ) {}
 
   async processUpload(
@@ -20,57 +23,38 @@ export class KnowledgeService {
     mimeType: string,
     originalName: string
   ) {
-    // 1. Generate SHA-256 Hash for duplicate detection
     const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
 
-    // 2. Check for duplicates in the same organization
-    const existingDoc = await prisma.document.findFirst({
-      where: {
-        hashSha256: hash,
-        knowledgeSource: {
-          organizationId: organizationId,
-        },
-      },
-    });
-
+    const existingDoc = await this.knowledgeRepo.findDuplicateDocument(hash, organizationId);
     if (existingDoc) {
       throw Object.assign(new Error('DuplicateDocument'), { statusCode: 409 });
     }
 
-    // 3. Upload to Cloudflare R2 via storage provider
     const storageKey = `${organizationId}/${uuidv4()}-${originalName}`;
     await this.storageProvider.upload(storageKey, fileBuffer, mimeType);
 
-    // 4. Create DB Records
-    const knowledgeSource = await prisma.knowledgeSource.create({
-      data: {
-        organizationId,
-        sourceType: this.mapMimeToSourceType(mimeType),
-        createdBy: userId,
-        status: 'PENDING',
-      },
+    const knowledgeSource = await this.knowledgeRepo.createKnowledgeSource({
+      organizationId,
+      sourceType: this.mapMimeToSourceType(mimeType),
+      createdBy: userId,
+      status: 'PENDING',
     });
 
-    const document = await prisma.document.create({
-      data: {
-        knowledgeSourceId: knowledgeSource.id,
-        storageKey,
-        mimeType,
-        sizeBytes: fileBuffer.length,
-        hashSha256: hash,
-      },
+    const document = await this.knowledgeRepo.createDocument({
+      knowledgeSourceId: knowledgeSource.id,
+      storageKey,
+      mimeType,
+      sizeBytes: fileBuffer.length,
+      hashSha256: hash,
     });
 
-    const ingestionJob = await prisma.ingestionJob.create({
-      data: {
-        knowledgeSourceId: knowledgeSource.id,
-        currentStage: 'UPLOADED',
-        progress: 0,
-        status: 'PENDING',
-      },
+    const ingestionJob = await this.jobRepo.createIngestionJob({
+      knowledgeSourceId: knowledgeSource.id,
+      currentStage: 'UPLOADED',
+      progress: 0,
+      status: 'PENDING',
     });
 
-    // 5. Enqueue Job to BullMQ for the Worker
     const payload: UploadJobPayload = {
       organizationId,
       knowledgeSourceId: knowledgeSource.id,
@@ -95,24 +79,16 @@ export class KnowledgeService {
   }
 
   async getKnowledgeSources(organizationId: string) {
-    return prisma.knowledgeSource.findMany({
-      where: { organizationId },
-      include: { document: true, ingestionJobs: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.knowledgeRepo.findManyByOrganizationId(organizationId);
   }
 
   async deleteKnowledgeSource(organizationId: string, sourceId: string, userId: string) {
-    const source = await prisma.knowledgeSource.findUnique({
-      where: { id: sourceId },
-      include: { document: true },
-    });
+    const source = await this.knowledgeRepo.findByIdWithDetails(sourceId);
 
     if (!source || source.organizationId !== organizationId) {
       throw Object.assign(new Error('NotFound'), { statusCode: 404 });
     }
 
-    // Instead of deleting immediately, we enqueue a delete job
     if (source.document) {
       await this.queueProvider.addJob(QueueName.INGESTION, JobName.DELETE, {
         organizationId,
@@ -122,11 +98,7 @@ export class KnowledgeService {
       });
     }
 
-    // Mark as pending deletion
-    await prisma.knowledgeSource.update({
-      where: { id: sourceId },
-      data: { status: 'PENDING' }, // or a 'DELETING' status if added to schema
-    });
+    await this.knowledgeRepo.updateKnowledgeSourceStatus(sourceId, 'PENDING');
 
     await this.auditLogRepo.create({
       organizationId,
@@ -138,11 +110,52 @@ export class KnowledgeService {
     return { success: true };
   }
 
+  async retryKnowledgeSource(organizationId: string, sourceId: string) {
+    const source = await this.knowledgeRepo.findByIdWithDetails(sourceId);
+
+    if (!source || source.organizationId !== organizationId) {
+      throw Object.assign(new Error('Knowledge source not found'), { statusCode: 404 });
+    }
+
+    if (source.status !== 'FAILED') {
+      throw Object.assign(new Error('Only failed sources can be retried'), { statusCode: 400 });
+    }
+
+    const latestJob = source.ingestionJobs[0];
+    if (!latestJob || latestJob.status !== 'FAILED') {
+      throw Object.assign(new Error('No failed ingestion job found'), { statusCode: 400 });
+    }
+
+    if (!source.document) {
+      throw Object.assign(new Error('No associated document found'), { statusCode: 400 });
+    }
+
+    await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, {
+      organizationId,
+      knowledgeSourceId: source.id,
+      documentId: source.document.id,
+      storageKey: source.document.storageKey,
+      mimeType: source.document.mimeType,
+    });
+
+    await this.jobRepo.updateIngestionJob(latestJob.id, {
+      status: 'PENDING',
+      currentStage: 'UPLOADED',
+      progress: 0,
+      retryCount: { increment: 1 },
+      failureReason: null,
+    });
+
+    await this.knowledgeRepo.updateKnowledgeSourceStatus(sourceId, 'PENDING');
+
+    return { success: true };
+  }
+
   private mapMimeToSourceType(mime: string) {
     if (mime === 'application/pdf') return 'PDF';
     if (mime.includes('wordprocessingml')) return 'DOCX';
     if (mime === 'text/plain') return 'TXT';
     if (mime === 'text/markdown' || mime === 'text/md') return 'MARKDOWN';
-    return 'TXT'; // Default fallback
+    return 'TXT';
   }
 }

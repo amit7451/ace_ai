@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { prisma } from '@ion-ai/database';
+import { conversationService } from '@ion-ai/chat';
 
 export const ConversationController: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
@@ -7,12 +7,7 @@ export const ConversationController: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/', async (request, reply) => {
     const organizationId = request.organization!.id;
-
-    const conversations = await prisma.conversation.findMany({
-      where: { organizationId },
-      orderBy: { lastActivity: 'desc' },
-      include: { visitor: true },
-    });
+    const conversations = await conversationService.getConversationsByOrganization(organizationId);
     return reply.send({ success: true, data: conversations });
   });
 
@@ -20,10 +15,7 @@ export const ConversationController: FastifyPluginAsync = async (fastify) => {
     const organizationId = request.organization!.id;
     const { id } = request.params as { id: string };
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id },
-      include: { messages: { orderBy: { createdAt: 'asc' } }, visitor: true },
-    });
+    const conversation = await conversationService.getConversationWithVisitor(id);
 
     if (!conversation || conversation.organizationId !== organizationId) {
       return reply.status(404).send({ success: false, error: 'Conversation not found' });

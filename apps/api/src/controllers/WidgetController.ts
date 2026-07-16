@@ -1,5 +1,4 @@
 import { FastifyPluginAsync } from 'fastify';
-import { prisma } from '@ion-ai/database';
 import { widgetService, deploymentService } from '@ion-ai/chat';
 import { z } from 'zod';
 
@@ -34,7 +33,7 @@ export const WidgetController: FastifyPluginAsync = async (fastify) => {
     const deployment = await deploymentService.getDeploymentForOrganization(organizationId);
     if (!deployment) return reply.send({ success: true, data: [] });
 
-    const widgets = await prisma.widget.findMany({ where: { deploymentId: deployment.id } });
+    const widgets = await widgetService.getWidgetsByDeployment(deployment.id);
     return reply.send({ success: true, data: widgets });
   });
 };

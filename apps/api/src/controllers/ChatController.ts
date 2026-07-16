@@ -2,7 +2,6 @@ import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { chatService, conversationService, widgetService, rateLimitService } from '@ion-ai/chat';
 import crypto from 'crypto';
-import { prisma } from '@ion-ai/database';
 
 export const ChatController: FastifyPluginAsync = async (fastify) => {
   fastify.post('/', async (request, reply) => {
@@ -45,13 +44,13 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
           return reply.status(400).send({ success: false, error: 'Missing x-organization-id' });
 
         organizationId = orgIdHeader;
-        const member = await prisma.organizationMember.findFirst({
-          where: { userId: (request.user as any).id, organizationId },
-        });
-        if (!member)
+        try {
+          await chatService.validatePlaygroundAccess((request.user as any).id, organizationId);
+        } catch (e) {
           return reply
             .status(401)
             .send({ success: false, error: 'Unauthorized for this organization' });
+        }
       }
 
       await rateLimitService.checkVisitorLimit(ipHash);
@@ -60,14 +59,12 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
       // Get or Create Conversation
       if (!conversationId) {
         // Find or create visitor session
-        let visitor = await prisma.visitorSession.findFirst({
-          where: { organizationId, ipHash },
-        });
-        if (!visitor) {
-          visitor = await prisma.visitorSession.create({
-            data: { organizationId, ipHash, userAgent },
-          });
-        }
+        const visitor = await chatService.getOrCreateVisitorSession(
+          organizationId,
+          ipHash,
+          userAgent
+        );
+
         const conv = await conversationService.createConversation(
           organizationId,
           deploymentId || undefined,
@@ -128,14 +125,12 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
 
     try {
       const widget = await widgetService.validateWidgetKey(widgetKey, request.headers.origin);
-      const orgConfig = await prisma.organizationConfiguration.findUnique({
-        where: { organizationId: widget.deployment.organizationId },
-      });
+      const welcomeMessage = await chatService.getWelcomeMessage(widget.deployment.organizationId);
 
       return reply.send({
         success: true,
         data: {
-          welcomeMessage: orgConfig?.welcomeMessage || 'Hi there! How can I help you today?',
+          welcomeMessage,
         },
       });
     } catch (err: any) {

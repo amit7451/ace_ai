@@ -1,4 +1,4 @@
-import { prisma } from '@ion-ai/database';
+import { chatRepository } from '../repositories/ChatRepository';
 import {
   RagOrchestrator,
   LLMProviderFactory,
@@ -13,9 +13,7 @@ import { env } from '@ion-ai/config';
 
 export class ChatService {
   async createOrchestrator(organizationId: string, context: 'playground' | 'widget') {
-    const orgConfig = await prisma.organizationConfiguration.findUnique({
-      where: { organizationId },
-    });
+    const orgConfig = await chatRepository.getOrganizationConfig(organizationId);
 
     if (!orgConfig) {
       throw new Error('Organization configuration not found');
@@ -36,9 +34,7 @@ export class ChatService {
       llmApiKey = process.env.GEMINI_API_KEY || '';
       llmModel = 'gemini-2.5-flash';
     } else {
-      const apiKeyRecord = await prisma.organizationApiKey.findUnique({
-        where: { organizationId_provider: { organizationId, provider: llmProvider } },
-      });
+      const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, llmProvider);
       if (!apiKeyRecord) {
         throw new Error(`API key for provider '${llmProvider}' is not configured.`);
       }
@@ -67,9 +63,10 @@ export class ChatService {
       embedderApiKey = process.env.GEMINI_API_KEY || '';
       embedderModel = 'gemini-embedding-001';
     } else {
-      const apiKeyRecord = await prisma.organizationApiKey.findUnique({
-        where: { organizationId_provider: { organizationId, provider: embedderProvider } },
-      });
+      const apiKeyRecord = await chatRepository.getOrganizationApiKey(
+        organizationId,
+        embedderProvider
+      );
       if (!apiKeyRecord) {
         throw new Error(`API key for embedding provider '${embedderProvider}' is not configured.`);
       }
@@ -125,9 +122,7 @@ Your ONLY allowed actions are:
     context: 'playground' | 'widget'
   ): Promise<{ stream: AsyncGenerator<ChatStreamChunk>; welcomeMessage?: string }> {
     const orchestrator = await this.createOrchestrator(organizationId, context);
-    const orgConfig = await prisma.organizationConfiguration.findUnique({
-      where: { organizationId },
-    });
+    const orgConfig = await chatRepository.getOrganizationConfig(organizationId);
 
     return {
       stream: orchestrator.stream({
@@ -138,6 +133,27 @@ Your ONLY allowed actions are:
       }),
       welcomeMessage: orgConfig?.welcomeMessage || 'Hi there! How can I help you today?',
     };
+  }
+
+  async validatePlaygroundAccess(userId: string, organizationId: string) {
+    const member = await chatRepository.getOrganizationMember(userId, organizationId);
+    if (!member) {
+      throw new Error('Unauthorized for this organization');
+    }
+    return member;
+  }
+
+  async getOrCreateVisitorSession(organizationId: string, ipHash: string, userAgent: string) {
+    let visitor = await chatRepository.getVisitorSession(organizationId, ipHash);
+    if (!visitor) {
+      visitor = await chatRepository.createVisitorSession({ organizationId, ipHash, userAgent });
+    }
+    return visitor;
+  }
+
+  async getWelcomeMessage(organizationId: string) {
+    const config = await chatRepository.getOrganizationConfig(organizationId);
+    return config?.welcomeMessage || 'Hi there! How can I help you today?';
   }
 }
 

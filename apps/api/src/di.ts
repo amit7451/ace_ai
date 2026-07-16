@@ -3,6 +3,9 @@ import { OrganizationRepository } from './repositories/OrganizationRepository';
 import { MemberRepository } from './repositories/MemberRepository';
 import { ConfigurationRepository } from './repositories/ConfigurationRepository';
 import { AuditLogRepository } from './repositories/AuditLogRepository';
+import { KnowledgeRepository } from './repositories/KnowledgeRepository';
+import { CrawlerRepository } from './repositories/CrawlerRepository';
+import { JobRepository } from './repositories/JobRepository';
 import { R2StorageProvider } from '@ion-ai/storage';
 import { BullMQProvider } from '@ion-ai/queue';
 
@@ -11,6 +14,8 @@ import { OrganizationService } from './services/OrganizationService';
 import { MemberService } from './services/MemberService';
 import { ConfigurationService } from './services/ConfigurationService';
 import { KnowledgeService } from './services/KnowledgeService';
+import { CrawlerService } from './services/CrawlerService';
+import { JobService } from './services/JobService';
 
 import { env } from '@ion-ai/config';
 
@@ -20,6 +25,9 @@ export const organizationRepository = new OrganizationRepository();
 export const memberRepository = new MemberRepository();
 export const configurationRepository = new ConfigurationRepository();
 export const auditLogRepository = new AuditLogRepository();
+export const knowledgeRepository = new KnowledgeRepository();
+export const crawlerRepository = new CrawlerRepository();
+export const jobRepository = new JobRepository();
 
 // Providers
 export const storageProvider = new R2StorageProvider({
@@ -51,5 +59,13 @@ export const configurationService = new ConfigurationService(
 export const knowledgeService = new KnowledgeService(
   storageProvider,
   queueProvider,
+  auditLogRepository,
+  knowledgeRepository,
+  jobRepository
+);
+export const crawlerService = new CrawlerService(
+  crawlerRepository,
+  queueProvider,
   auditLogRepository
 );
+export const jobService = new JobService(jobRepository, knowledgeRepository, queueProvider);
