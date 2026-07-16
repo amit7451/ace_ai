@@ -48,4 +48,8 @@ export const configurationService = new ConfigurationService(
   configurationRepository,
   auditLogRepository
 );
-export const knowledgeService = new KnowledgeService(storageProvider, queueProvider);
+export const knowledgeService = new KnowledgeService(
+  storageProvider,
+  queueProvider,
+  auditLogRepository
+);

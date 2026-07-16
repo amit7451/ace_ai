@@ -4,10 +4,13 @@ import { IQueueProvider, QueueName, JobName, UploadJobPayload } from '@ion-ai/qu
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
+import { AuditLogRepository } from '../repositories/AuditLogRepository';
+
 export class KnowledgeService {
   constructor(
     private storageProvider: IStorageProvider,
-    private queueProvider: IQueueProvider
+    private queueProvider: IQueueProvider,
+    private auditLogRepo: AuditLogRepository
   ) {}
 
   async processUpload(
@@ -78,6 +81,13 @@ export class KnowledgeService {
 
     await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, payload);
 
+    await this.auditLogRepo.create({
+      organizationId,
+      action: 'KNOWLEDGE_UPLOADED',
+      actorId: userId,
+      metadata: { originalName, mimeType, documentId: document.id },
+    });
+
     return {
       knowledgeSourceId: knowledgeSource.id,
       jobId: ingestionJob.id,
@@ -92,7 +102,7 @@ export class KnowledgeService {
     });
   }
 
-  async deleteKnowledgeSource(organizationId: string, sourceId: string) {
+  async deleteKnowledgeSource(organizationId: string, sourceId: string, userId: string) {
     const source = await prisma.knowledgeSource.findUnique({
       where: { id: sourceId },
       include: { document: true },
@@ -116,6 +126,13 @@ export class KnowledgeService {
     await prisma.knowledgeSource.update({
       where: { id: sourceId },
       data: { status: 'PENDING' }, // or a 'DELETING' status if added to schema
+    });
+
+    await this.auditLogRepo.create({
+      organizationId,
+      action: 'KNOWLEDGE_DELETED',
+      actorId: userId,
+      metadata: { sourceId },
     });
 
     return { success: true };

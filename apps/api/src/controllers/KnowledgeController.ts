@@ -31,7 +31,7 @@ export async function knowledgeController(fastify: FastifyInstance) {
 
   fastify.delete('/:id', async (request: FastifyRequest) => {
     const { id } = request.params as { id: string };
-    await knowledgeService.deleteKnowledgeSource(request.organization!.id, id);
+    await knowledgeService.deleteKnowledgeSource(request.organization!.id, id, request.user.sub);
     return { success: true };
   });
 

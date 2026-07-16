@@ -25,6 +25,8 @@ import { ChatController } from './controllers/ChatController';
 import { WidgetController } from './controllers/WidgetController';
 import { ConversationController } from './controllers/ConversationController';
 
+import { auditLogController } from './controllers/AuditLogController';
+
 // Plugins
 server.register(cors, {
   origin: env.FRONTEND_URL,
@@ -51,6 +53,7 @@ server.register(
     api.register(authController, { prefix: '/auth' });
     api.register(organizationController, { prefix: '/organizations' });
     api.register(memberController, { prefix: '/organizations/:id/members' });
+    api.register(auditLogController, { prefix: '/organizations/:id/audit-logs' });
     api.register(configurationController, { prefix: '/configuration' });
     api.register(knowledgeController, { prefix: '/knowledge' });
     api.register(crawlerController, { prefix: '/crawlers' });

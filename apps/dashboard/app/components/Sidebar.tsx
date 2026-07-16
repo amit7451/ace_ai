@@ -31,6 +31,7 @@ export default function Sidebar() {
     { name: 'Ingestion Jobs', href: '/jobs' },
     { name: 'Members', href: '/members' },
     { name: 'Widgets', href: '/widgets' },
+    { name: 'Audit Logs', href: '/audit-logs' },
     { name: 'Settings', href: '/settings' },
   ];
 

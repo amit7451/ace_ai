@@ -9,6 +9,7 @@ export class AuditLogRepository {
     return prisma.auditLog.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
   }
 }

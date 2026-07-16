@@ -55,6 +55,14 @@ export async function crawlerController(fastify: FastifyInstance) {
       },
     });
 
+    const { auditLogRepository } = await import('../di');
+    await auditLogRepository.create({
+      organizationId: request.organization!.id,
+      action: 'CRAWL_RETRIED',
+      actorId: request.user.sub,
+      metadata: { crawlJobId: crawler.id, url: crawler.url },
+    });
+
     return { success: true };
   });
 }
