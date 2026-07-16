@@ -14,7 +14,31 @@ export class OrganizationService {
   ) {}
 
   async createOrganization(userId: string, data: CreateOrganizationRequest) {
-    const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    let baseSlug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+    if (!baseSlug) {
+      baseSlug = 'organization';
+    }
+
+    let slug = baseSlug;
+    let isUnique = false;
+    let attempts = 0;
+
+    while (!isUnique) {
+      const existing = await this.orgRepo.findBySlug(slug);
+      if (!existing) {
+        isUnique = true;
+      } else {
+        attempts++;
+        if (attempts > 10) {
+          throw new Error('Failed to generate a unique organization slug');
+        }
+        const suffix = Math.random().toString(36).substring(2, 8);
+        slug = `${baseSlug}-${suffix}`;
+      }
+    }
 
     // Create org
     const org = await this.orgRepo.create({ name: data.name, slug });
