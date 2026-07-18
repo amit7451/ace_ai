@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 
 export default function KnowledgePage() {
   const [sources, setSources] = useState<any[]>([]);
+  const [crawlers, setCrawlers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [activeJobs, setActiveJobs] = useState<Record<string, any>>({});
@@ -22,6 +23,19 @@ export default function KnowledgePage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCrawlers = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/v1/crawlers', {
+        headers: { 'x-organization-id': localStorage.getItem('organizationId') || '' },
+        credentials: 'include',
+      });
+      const json = await response.json();
+      if (json.success) setCrawlers(json.data);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -102,11 +116,40 @@ export default function KnowledgePage() {
     }
   };
 
+  const handleDeleteCrawler = async (id: string) => {
+    if (
+      !confirm(
+        'Are you sure you want to completely delete this crawl job and all its extracted files?'
+      )
+    )
+      return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/v1/crawlers/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'x-organization-id': localStorage.getItem('organizationId') || '',
+        },
+        credentials: 'include',
+      });
+      const json = await response.json();
+      if (json.success) {
+        fetchCrawlers();
+      } else {
+        alert('Failed to delete crawler: ' + json.error?.message);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to trigger deletion.');
+    }
+  };
+
   useEffect(() => {
     // ONE initial fetch
     if (!initialFetchDone.current) {
       initialFetchDone.current = true;
       fetchSources();
+      fetchCrawlers();
     }
 
     const orgId = localStorage.getItem('organizationId') || '';
@@ -190,132 +233,217 @@ export default function KnowledgePage() {
     return storageKey;
   };
 
-  return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Knowledge Sources</h1>
+  // Filter to avoid showing website sources in the document list if they happen to appear
+  const documentSources = sources.filter((s) => s.sourceType !== 'WEBSITE');
 
-        <label
-          className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 ${uploading ? 'opacity-50' : ''}`}
-        >
-          {uploading ? 'Uploading...' : 'Upload Document'}
-          <input
-            type="file"
-            className="hidden"
-            onChange={handleUpload}
-            disabled={uploading}
-            accept=".pdf,.txt,.md,.docx"
-          />
-        </label>
+  return (
+    <div className="p-8 max-w-5xl mx-auto space-y-12">
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Document Knowledge Base</h1>
+
+          <label
+            className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 ${uploading ? 'opacity-50' : ''}`}
+          >
+            {uploading ? 'Uploading...' : 'Upload Document'}
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleUpload}
+              disabled={uploading}
+              accept=".pdf,.txt,.md,.docx"
+            />
+          </label>
+        </div>
+
+        <div className="bg-white rounded-lg shadow border overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Title
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Size
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Uploaded
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {documentSources.map((s) => {
+                const activeJob = activeJobs[s.id];
+                // Use live SSE status if it exists, otherwise use database status
+                const displayStatus = activeJob ? activeJob.status : s.status;
+                const displayProgress = activeJob ? activeJob.progress : 0;
+                const isRunning = displayStatus === 'RUNNING' || displayStatus === 'PENDING';
+
+                return (
+                  <tr key={s.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {extractFilename(s.document?.storageKey)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {s.sourceType}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatSize(s.document?.sizeBytes)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex flex-col space-y-1">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full w-fit ${
+                            displayStatus === 'COMPLETED'
+                              ? 'bg-green-100 text-green-800'
+                              : displayStatus === 'FAILED'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {displayStatus}
+                        </span>
+                        {isRunning && activeJob?.currentStage && (
+                          <span className="text-[10px] font-medium text-gray-500">
+                            {activeJob.currentStage}
+                          </span>
+                        )}
+                        {isRunning && displayProgress > 0 && (
+                          <div className="flex items-center space-x-2 mt-1">
+                            <div className="w-24 bg-gray-200 rounded-full h-1.5 overflow-hidden flex items-center">
+                              <div
+                                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                                style={{ width: `${displayProgress}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-blue-600">
+                              {displayProgress}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(s.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium space-x-4">
+                      {displayStatus === 'FAILED' && (
+                        <button
+                          onClick={() => handleRetry(s.id)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Retry
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(s.id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {documentSources.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    No document sources uploaded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow border overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Title
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Type
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Size
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Uploaded
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {sources.map((s) => {
-              const activeJob = activeJobs[s.id];
-              // Use live SSE status if it exists, otherwise use database status
-              const displayStatus = activeJob ? activeJob.status : s.status;
-              const displayProgress = activeJob ? activeJob.progress : 0;
-              const isRunning = displayStatus === 'RUNNING' || displayStatus === 'PENDING';
-
-              return (
-                <tr key={s.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {extractFilename(s.document?.storageKey)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {s.sourceType}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatSize(s.document?.sizeBytes)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="flex flex-col space-y-1">
+      <div>
+        <div className="flex justify-between items-center mb-6 mt-12">
+          <h1 className="text-2xl font-bold text-gray-900">Crawler Knowledge / Websites</h1>
+        </div>
+        <div className="bg-white rounded-lg shadow border overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Seed URL
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Pages
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Started
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {crawlers.map((c) => {
+                return (
+                  <tr key={c.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:underline">
+                      <a href={c.url} target="_blank" rel="noopener noreferrer">
+                        {c.url}
+                      </a>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {c.pagesCrawled} completed
+                      {c.pagesFailed > 0 && (
+                        <span className="text-red-500 ml-2">({c.pagesFailed} failed)</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <span
                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full w-fit ${
-                          displayStatus === 'COMPLETED'
+                          c.status === 'COMPLETED'
                             ? 'bg-green-100 text-green-800'
-                            : displayStatus === 'FAILED'
+                            : c.status === 'FAILED'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-yellow-100 text-yellow-800'
                         }`}
                       >
-                        {displayStatus}
+                        {c.status}
                       </span>
-                      {isRunning && activeJob?.currentStage && (
-                        <span className="text-[10px] font-medium text-gray-500">
-                          {activeJob.currentStage}
-                        </span>
-                      )}
-                      {isRunning && displayProgress > 0 && (
-                        <div className="flex items-center space-x-2 mt-1">
-                          <div className="w-24 bg-gray-200 rounded-full h-1.5 overflow-hidden flex items-center">
-                            <div
-                              className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                              style={{ width: `${displayProgress}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-[10px] font-semibold text-blue-600">
-                            {displayProgress}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(s.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium space-x-4">
-                    {displayStatus === 'FAILED' && (
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(c.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-left text-sm font-medium space-x-4">
                       <button
-                        onClick={() => handleRetry(s.id)}
-                        className="text-blue-600 hover:text-blue-900"
+                        onClick={() => handleDeleteCrawler(c.id)}
+                        className="text-red-600 hover:text-red-900"
+                        disabled={c.status === 'RUNNING'}
                       >
-                        Retry
+                        Delete
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(s.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {crawlers.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    No websites crawled yet.
                   </td>
                 </tr>
-              );
-            })}
-            {sources.length === 0 && !loading && (
-              <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                  No knowledge sources uploaded yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

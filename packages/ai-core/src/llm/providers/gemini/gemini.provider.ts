@@ -72,18 +72,19 @@ export class GeminiProvider extends BaseLLMProvider {
     messages: LLMMessage[],
     options?: LLMCompletionOptions
   ): AsyncGenerator<LLMStreamChunk, void, unknown> {
-    const response = await this.executeWithResilience(() =>
-      fetch(this.buildUrl('streamGenerateContent'), {
+    const response = await this.executeWithResilience(async () => {
+      const res = await fetch(this.buildUrl('streamGenerateContent'), {
         method: 'POST',
         headers: this.buildHeaders(this.authHeaders()),
         body: JSON.stringify(this.buildRequestBody(messages, options)),
         signal: options?.signal,
-      })
-    );
+      });
 
-    if (!response.ok) {
-      throw await mapHttpErrorResponse(response, this.name, this.model);
-    }
+      if (!res.ok) {
+        throw await mapHttpErrorResponse(res, this.name, this.model);
+      }
+      return res;
+    });
     if (!response.body) {
       throw new LLMInvalidRequestError('Gemini stream response had no body.', {
         provider: this.name,

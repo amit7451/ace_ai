@@ -97,12 +97,17 @@ function walk($: cheerio.CheerioAPI, node: Element, lines: string[]): void {
       return;
     }
     default: {
-      // Container/inline element: recurse into element children only.
-      // (Bare text nodes directly under a container without an enclosing
-      // <p> — a common real-world pattern — are picked up by the parent's
-      // own .text() calls above where relevant; skipping them here avoids
-      // duplicating text across levels.)
-      $node.children().each((_, child) => walk($, child, lines));
+      // Container/inline element: capture any direct text nodes that aren't purely whitespace,
+      // then recurse into child elements. This ensures we don't drop text just because it's
+      // wrapped in a <div> or <span> instead of a <p>.
+      $node.contents().each((_, child) => {
+        if (child.type === 'text') {
+          const text = collapseWhitespace($(child).text());
+          if (text) lines.push(text, '');
+        } else if (child.type === 'tag') {
+          walk($, child as Element, lines);
+        }
+      });
     }
   }
 }

@@ -164,12 +164,42 @@ export class CrawlerService {
       });
     }
 
-    const crawler = await this.crawlerRepo.findById(crawlerId);
+    const crawler = await this.crawlerRepo.findByIdWithPages(crawlerId);
     if (!crawler || crawler.organizationId !== organizationId) {
       throw Object.assign(new Error('Crawler job not found'), { statusCode: 404 });
     }
     if (crawler.status === 'RUNNING') {
       throw Object.assign(new Error('Cancel this crawl before deleting it.'), { statusCode: 400 });
+    }
+
+    // Completely clean up knowledge sources produced by this crawl.
+    // Fetch all crawled pages that have a linked knowledge source.
+    const { prisma } = await import('@ion-ai/database');
+    const pagesWithKnowledge = await prisma.crawledPage.findMany({
+      where: { crawlJobId: crawler.id, knowledgeSourceId: { not: null } },
+      include: {
+        knowledgeSource: {
+          include: { document: true },
+        },
+      },
+    });
+
+    for (const page of pagesWithKnowledge) {
+      if (page.knowledgeSource?.document) {
+        // Enqueue deletion from R2 and Qdrant
+        await this.queueProvider.addJob(QueueName.INGESTION, JobName.DELETE, {
+          organizationId,
+          knowledgeSourceId: page.knowledgeSource.id,
+          documentId: page.knowledgeSource.document.id,
+          storageKey: page.knowledgeSource.document.storageKey,
+        });
+
+        // Mark as PENDING so it appears in transition state before worker deletes it
+        await prisma.knowledgeSource.update({
+          where: { id: page.knowledgeSource.id },
+          data: { status: 'PENDING' },
+        });
+      }
     }
 
     await this.crawlerRepo.deleteById(crawlerId);

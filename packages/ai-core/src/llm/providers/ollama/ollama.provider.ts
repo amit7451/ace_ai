@@ -67,18 +67,19 @@ export class OllamaProvider extends BaseLLMProvider {
     messages: LLMMessage[],
     options?: LLMCompletionOptions
   ): AsyncGenerator<LLMStreamChunk, void, unknown> {
-    const response = await this.executeWithResilience(() =>
-      fetch(`${this.baseUrl}/api/chat`, {
+    const response = await this.executeWithResilience(async () => {
+      const res = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: this.buildHeaders(),
         body: JSON.stringify(this.buildRequestBody(messages, options, true)),
         signal: options?.signal,
-      })
-    );
+      });
 
-    if (!response.ok) {
-      throw await this.toOllamaError(response);
-    }
+      if (!res.ok) {
+        throw await this.toOllamaError(res);
+      }
+      return res;
+    });
     if (!response.body) {
       throw new LLMInvalidRequestError('Ollama stream response had no body.', {
         provider: this.name,

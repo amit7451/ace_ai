@@ -11,8 +11,26 @@ import { FastifyInstance } from 'fastify';
 
 const server = fastify({
   logger: logger,
+  disableRequestLogging: true,
   genReqId: () => crypto.randomUUID(),
 }) as unknown as FastifyInstance;
+
+server.addHook('onRequest', (req, reply, done) => {
+  if (req.method !== 'OPTIONS' && !req.url.startsWith('/api/v1/jobs/stream')) {
+    req.log.info({ req: { method: req.method, url: req.url } }, 'incoming request');
+  }
+  done();
+});
+
+server.addHook('onResponse', (req, reply, done) => {
+  if (req.method !== 'OPTIONS' && !req.url.startsWith('/api/v1/jobs/stream')) {
+    req.log.info(
+      { res: { statusCode: reply.statusCode }, responseTime: reply.getResponseTime() },
+      'request completed'
+    );
+  }
+  done();
+});
 
 import { authController } from './controllers/AuthController';
 import { organizationController } from './controllers/OrganizationController';
