@@ -18,6 +18,7 @@
     "@ion-ai/chat": "workspace:*",
     "@ion-ai/config": "workspace:*",
     "@ion-ai/contracts": "workspace:*",
+    "@ion-ai/crawler": "workspace:*",
     "@ion-ai/database": "workspace:*",
     "@ion-ai/logger": "workspace:*",
     "@ion-ai/queue": "workspace:*",

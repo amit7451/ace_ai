@@ -13,6 +13,7 @@
     "@ion-ai/database": "workspace:*",
     "@ion-ai/config": "workspace:*",
     "@ion-ai/logger": "workspace:*",
+    "@ion-ai/crawler": "workspace:*",
     "@ai-chatbot-platform/ai-core": "workspace:*",
     "bullmq": "^5.8.0",
     "ioredis": "^5.4.1",

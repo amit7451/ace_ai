@@ -58,6 +58,9 @@ importers:
       '@ion-ai/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ion-ai/crawler':
+        specifier: workspace:*
+        version: link:../../packages/crawler
       '@ion-ai/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -147,6 +150,9 @@ importers:
       '@ion-ai/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@ion-ai/crawler':
+        specifier: workspace:*
+        version: link:../../packages/crawler
       '@ion-ai/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -300,7 +306,25 @@ importers:
       cheerio:
         specifier: ^1.0.0-rc.12
         version: 1.2.0
+      domhandler:
+        specifier: ^5.0.3
+        version: 5.0.3
+      robots-parser:
+        specifier: ^3.0.1
+        version: 3.0.1
     devDependencies:
+      '@types/jest':
+        specifier: ^29.5.12
+        version: 29.5.14
+      '@types/node':
+        specifier: ^20.14.9
+        version: 20.19.43
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@20.19.43)(ts-node@10.9.2(@types/node@20.19.43)(typescript@5.9.3))
+      ts-jest:
+        specifier: ^29.1.5
+        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest-util@29.7.0)(jest@29.7.0(@types/node@20.19.43)(ts-node@10.9.2(@types/node@20.19.43)(typescript@5.9.3)))(typescript@5.9.3)
       typescript:
         specifier: ^5.5.3
         version: 5.9.3
@@ -5827,6 +5851,13 @@ packages:
     deprecated: Rimraf versions prior to v4 are no longer supported
     hasBin: true
 
+  robots-parser@3.0.1:
+    resolution:
+      {
+        integrity: sha512-s+pyvQeIKIZ0dx5iJiQk1tPLJAWln39+MI5jtM8wnyws+G5azk+dMnMX0qfbqNetKKNgcWWOdi0sfm+FbQbgdQ==,
+      }
+    engines: { node: '>=10.0.0' }
+
   rollup@4.62.2:
     resolution:
       {
@@ -10226,6 +10257,8 @@ snapshots:
   rimraf@3.0.2:
     dependencies:
       glob: 7.2.3
+
+  robots-parser@3.0.1: {}
 
   rollup@4.62.2:
     dependencies:

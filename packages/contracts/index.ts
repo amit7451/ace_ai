@@ -55,3 +55,36 @@ export type CreateOrganizationRequest = z.infer<typeof CreateOrganizationRequest
 export type UpdateOrganizationConfigurationRequest = z.infer<
   typeof UpdateOrganizationConfigurationSchema
 >;
+
+// -----------------------------------------
+// Crawler
+// -----------------------------------------
+
+/**
+ * A path pattern used for includePaths/excludePaths: matched against a
+ * URL's pathname only (not the query string). `*` matches within one path
+ * segment, `**` matches across segments — e.g. `/docs/**` matches
+ * `/docs/2024/setup`, `/docs/*` does not.
+ */
+const PathPatternSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((p) => p.startsWith('/'), { message: 'Path patterns must start with "/"' });
+
+export const CreateCrawlJobRequestSchema = z.object({
+  url: z
+    .string()
+    .url()
+    .refine((u) => u.startsWith('http://') || u.startsWith('https://'), {
+      message: 'URL must use http or https.',
+    }),
+  maxPages: z.number().int().min(1).max(500).optional(),
+  maxDepth: z.number().int().min(0).max(10).optional(),
+  includePaths: z.array(PathPatternSchema).max(50).optional(),
+  excludePaths: z.array(PathPatternSchema).max(50).optional(),
+  respectRobotsTxt: z.boolean().optional(),
+  sameOriginOnly: z.boolean().optional(),
+});
+
+export type CreateCrawlJobRequest = z.infer<typeof CreateCrawlJobRequestSchema>;

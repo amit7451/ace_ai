@@ -125,6 +125,12 @@ model KnowledgeSource {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   document       Document?
   ingestionJobs  IngestionJob[]
+  // NEW: back-relation for the CrawledPage this source was created from,
+  // when sourceType = WEBSITE. Optional/SetNull so deleting the crawl run's
+  // history (CrawlJob -> CrawledPage, cascade) never deletes the knowledge
+  // it already produced — that's a separate, deliberate action from the
+  // Knowledge page.
+  crawledPage    CrawledPage?
 }
 
 enum KnowledgeStatus {
@@ -179,7 +185,54 @@ model CrawlJob {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // --- NEW: crawl configuration, set once at creation time ---
+  maxPages         Int      @default(50)
+  maxDepth         Int      @default(3)
+  includePaths     String[] @default([])
+  excludePaths     String[] @default([])
+  respectRobotsTxt Boolean  @default(true)
+  sameOriginOnly   Boolean  @default(true)
+
+  // --- NEW: live progress, updated incrementally by the worker ---
+  pagesDiscovered  Int      @default(0)
+  pagesFailed      Int      @default(0)
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // NEW
+  pages          CrawledPage[]
+
+  @@index([organizationId, createdAt])
+}
+
+// NEW MODEL — one row per URL a crawl job visited, so a dev integrating this
+// can see exactly which pages made it into the knowledge base and why any
+// page didn't (robots.txt, a 404, a timeout, non-HTML content, etc.),
+// instead of a single opaque pass/fail count for the whole site.
+model CrawledPage {
+  id                String            @id @default(uuid())
+  crawlJobId        String
+  url               String
+  depth             Int               @default(0)
+  status            CrawledPageStatus @default(PENDING)
+  httpStatus        Int?
+  errorMessage      String?
+  knowledgeSourceId String?           @unique
+  discoveredAt      DateTime          @default(now())
+  completedAt       DateTime?
+
+  crawlJob          CrawlJob         @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
+  knowledgeSource   KnowledgeSource? @relation(fields: [knowledgeSourceId], references: [id], onDelete: SetNull)
+
+  @@unique([crawlJobId, url])
+  @@index([crawlJobId, status])
+}
+
+// NEW ENUM
+enum CrawledPageStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  SKIPPED
 }
 
 model IngestionJob {
