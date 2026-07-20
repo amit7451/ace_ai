@@ -12,3 +12,11 @@ export {
 } from './ssrf-guard';
 export { safeFetch, SafeFetchError } from './safe-fetch';
 export type { SafeFetchOptions, SafeFetchResult } from './safe-fetch';
+export { BrowserRenderer } from './browser-fetch';
+export type { BrowserRenderResult, BrowserRendererOptions } from './browser-fetch';
+export { findPlatformContent } from './content/platform-extractors';
+export type { PlatformMatch } from './content/platform-extractors';
+export { detectClientRenderedShell } from './content/spa-detection';
+export type { SpaDetectionResult } from './content/spa-detection';
+export { htmlToMarkdown } from './content/markdown-converter';
+export { sanitizeExtractedText } from './content/sanitize-text';

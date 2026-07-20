@@ -119,6 +119,8 @@ export function assertValidSeedUrl(rawUrl: string): URL {
   return parsed;
 }
 
+const globalDnsCache = new Map<string, Promise<{ address: string; family: 4 | 6 }>>();
+
 /**
  * Resolves `hostname` and returns ONE validated public IP address + family,
  * throwing if the hostname is an IP literal in a blocked range, or if every
@@ -136,19 +138,42 @@ export async function resolvePublicAddress(
     return { address: hostname, family: net.isIPv6(hostname) ? 6 : 4 };
   }
 
-  const results = await dns.promises.lookup(hostname, { all: true, verbatim: true });
-  if (results.length === 0) {
-    throw new SsrfBlockedError(`Could not resolve hostname: ${hostname}`);
+  let promise = globalDnsCache.get(hostname);
+  if (!promise) {
+    promise = (async () => {
+      const results = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+      if (results.length === 0) {
+        throw new SsrfBlockedError(`Could not resolve hostname: ${hostname}`);
+      }
+
+      for (const { address } of results) {
+        if (isBlockedIp(address)) {
+          throw new SsrfBlockedError(
+            `Hostname "${hostname}" resolves to a private/reserved address (${address}); refusing to crawl.`
+          );
+        }
+      }
+
+      const first = results[0];
+      return { address: first.address, family: first.family as 4 | 6 };
+    })();
+
+    globalDnsCache.set(hostname, promise);
+
+    // Evict after 5 minutes to respect DNS TTLs loosely
+    promise
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(
+          () => {
+            if (globalDnsCache.get(hostname) === promise) {
+              globalDnsCache.delete(hostname);
+            }
+          },
+          5 * 60 * 1000
+        ).unref();
+      });
   }
 
-  for (const { address } of results) {
-    if (isBlockedIp(address)) {
-      throw new SsrfBlockedError(
-        `Hostname "${hostname}" resolves to a private/reserved address (${address}); refusing to crawl.`
-      );
-    }
-  }
-
-  const first = results[0];
-  return { address: first.address, family: first.family as 4 | 6 };
+  return promise;
 }

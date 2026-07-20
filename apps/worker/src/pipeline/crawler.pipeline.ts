@@ -6,7 +6,7 @@ import {
   EmbeddingProviderFactory,
   VectorStoreProviderFactory,
 } from '@ai-chatbot-platform/ai-core';
-import { WebsiteCrawler, CrawledPageResult, CrawlConfig } from '@ion-ai/crawler';
+import { WebsiteCrawler, CrawledPageResult, CrawlConfig, BrowserRenderer } from '@ion-ai/crawler';
 import { CrawlJobPayload } from '@ion-ai/queue';
 import { resolveEmbeddingProvider } from '../lib/resolve-embedding-provider';
 
@@ -207,15 +207,30 @@ export class CrawlerPipeline {
 
         await this.bumpCounts(job.crawlJobId);
       } catch (err: any) {
-        // A single page's ingestion failing (bad embedding response, R2
-        // hiccup, etc.) must not take the rest of a 50-page crawl down with
-        // it — record it as a failed page and keep going.
-        console.error(`Failed to ingest ${page.url} (crawl ${job.crawlJobId}):`, err);
-        await this.upsertPage(
-          job.crawlJobId,
-          { ...page, status: 'FAILED', errorMessage: err.message ?? String(err) },
-          'FAILED'
-        );
+        if (err.name === 'KnowledgeEmptyContentError') {
+          console.log(
+            `[crawl ${job.crawlJobId}] ${page.url} yielded no chunks (empty content after parsing); marking SKIPPED.`
+          );
+          await this.upsertPage(
+            job.crawlJobId,
+            {
+              ...page,
+              status: 'SKIPPED',
+              errorMessage: 'No indexable content found after cleaning',
+            },
+            'SKIPPED'
+          );
+        } else {
+          // A single page's ingestion failing (bad embedding response, R2
+          // hiccup, etc.) must not take the rest of a 50-page crawl down with
+          // it — record it as a failed page and keep going.
+          console.error(`Failed to ingest ${page.url} (crawl ${job.crawlJobId}):`, err);
+          await this.upsertPage(
+            job.crawlJobId,
+            { ...page, status: 'FAILED', errorMessage: err.message ?? String(err) },
+            'FAILED'
+          );
+        }
         await this.bumpCounts(job.crawlJobId);
       }
     };
@@ -238,6 +253,7 @@ export class CrawlerPipeline {
       return cachedCancelled;
     };
 
+    const renderer = new BrowserRenderer();
     const config: CrawlConfig = {
       seedUrl: crawlJob.url,
       maxPages: crawlJob.maxPages,
@@ -247,6 +263,14 @@ export class CrawlerPipeline {
       respectRobotsTxt: crawlJob.respectRobotsTxt,
       sameOriginOnly: crawlJob.sameOriginOnly,
       alreadyCompletedUrls,
+      renderJsFallback: async (url) => {
+        try {
+          return await renderer.render(url);
+        } catch (err) {
+          console.warn(`[crawl ${job.crawlJobId}] SPA fallback render failed for ${url}:`, err);
+          return null;
+        }
+      },
     };
 
     try {
@@ -275,13 +299,17 @@ export class CrawlerPipeline {
       console.error(`Crawl ${job.crawlJobId} failed:`, err);
       await this.failJob(job.crawlJobId, err.message ?? String(err));
       throw err; // let BullMQ record the job-level failure/retry too
+    } finally {
+      await renderer
+        .close()
+        .catch((err) => console.error(`[crawl ${job.crawlJobId}] Error closing renderer:`, err));
     }
   }
 
   private async upsertPage(
     crawlJobId: string,
     page: CrawledPageResult,
-    statusOverride?: 'PENDING' | 'FAILED'
+    statusOverride?: 'PENDING' | 'FAILED' | 'SKIPPED'
   ) {
     const status = statusOverride ?? page.status;
     return prisma.crawledPage.upsert({

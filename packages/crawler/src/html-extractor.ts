@@ -1,13 +1,26 @@
+import { JSDOM } from 'jsdom';
+import { Readability } from '@mozilla/readability';
 import * as cheerio from 'cheerio';
-import type { Element } from 'domhandler';
+import { findPlatformContent } from './content/platform-extractors';
+import { htmlToMarkdown } from './content/markdown-converter';
+import { sanitizeExtractedText } from './content/sanitize-text';
+import { detectClientRenderedShell } from './content/spa-detection';
 
 export interface ExtractedPage {
   title: string;
-  /** Lightly-structured Markdown (headings, paragraphs, lists, code blocks) — good input for ai-core's markdown-aware chunker, which keeps sections together by heading. */
   markdown: string;
+  /** True when this extraction probably missed the page's real content because it needs JavaScript to render (React/Vue/Angular SPA shell, etc.) — see browser-fetch.ts for the fallback. */
+  likelyNeedsJsRendering: boolean;
+  jsRenderingReason?: string;
 }
 
-/** Elements whose entire subtree is noise for RAG purposes and should never contribute text. */
+/**
+ * Chrome that's noise regardless of what generated the page — removed
+ * unconditionally, even from content Readability/a platform selector
+ * already picked out (neither is perfect at every edge case: an ad iframe
+ * or a "related posts" widget occasionally ends up inside the matched
+ * container on real sites).
+ */
 const NOISE_SELECTORS = [
   'script',
   'style',
@@ -21,124 +34,116 @@ const NOISE_SELECTORS = [
   'iframe',
   'svg',
   'button',
+  'dialog',
   '[aria-hidden="true"]',
   '[role="navigation"]',
   '[role="banner"]',
   '[role="contentinfo"]',
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+  '[class*="cookie-banner"]',
+  '[class*="cookie-consent"]',
+  '[id*="cookie-consent"]',
+  '[class*="cookie-notice"]',
+  '[class*="newsletter-signup"]',
+  '[class*="popup"]',
+  '[class*="modal"]',
+  '[class*="social-share"]',
+  '[class*="share-buttons"]',
+  '[class*="related-posts"]',
+  '[class*="recommended-posts"]',
+  '[class*="advertisement"]',
+  '[class*="ad-container"]',
+  '[id*="google_ads"]',
+  '[class*="adsbygoogle"]',
+  '#comments',
+  '[class*="comment-section"]',
+  '[class*="breadcrumb"]',
+  '.skip-link',
+  '.visually-hidden',
+  '.sr-only',
 ];
 
-/** Prefer a real "main content" container over the whole page when one exists, to skip nav/sidebar noise that NOISE_SELECTORS doesn't catch by tag name alone. */
-function selectContentRoot($: cheerio.CheerioAPI) {
-  for (const selector of ['main', 'article', '[role="main"]', '#content', '#main']) {
-    const el = $(selector).first();
-    if (el.length > 0) return el;
-  }
-  return $('body');
-}
-
-function collapseWhitespace(text: string): string {
-  return text.replace(/[ \t]+/g, ' ').trim();
-}
-
-/** Recursively walks block-level elements, producing one Markdown-ish line (or blank line) per block. */
-function walk($: cheerio.CheerioAPI, node: Element, lines: string[]): void {
-  const tag = node.tagName?.toLowerCase();
-  const $node = $(node);
-
-  switch (tag) {
-    case 'h1':
-    case 'h2':
-    case 'h3':
-    case 'h4':
-    case 'h5':
-    case 'h6': {
-      const level = Number(tag[1]);
-      const text = collapseWhitespace($node.text());
-      if (text) lines.push('', `${'#'.repeat(level)} ${text}`, '');
-      return;
-    }
-    case 'p': {
-      const text = collapseWhitespace($node.text());
-      if (text) lines.push(text, '');
-      return;
-    }
-    case 'li': {
-      const text = collapseWhitespace($node.text());
-      if (text) lines.push(`- ${text}`);
-      return;
-    }
-    case 'ul':
-    case 'ol': {
-      $node.children('li').each((_, li) => walk($, li, lines));
-      lines.push('');
-      return;
-    }
-    case 'blockquote': {
-      const text = collapseWhitespace($node.text());
-      if (text) lines.push(`> ${text}`, '');
-      return;
-    }
-    case 'pre': {
-      const text = $node.text().trim();
-      if (text) lines.push('```', text, '```', '');
-      return;
-    }
-    case 'br': {
-      lines.push('');
-      return;
-    }
-    case 'tr': {
-      const cells = $node
-        .children('td, th')
-        .map((_, cell) => collapseWhitespace($(cell).text()))
-        .get()
-        .filter(Boolean);
-      if (cells.length > 0) lines.push(cells.join(' | '));
-      return;
-    }
-    default: {
-      // Container/inline element: capture any direct text nodes that aren't purely whitespace,
-      // then recurse into child elements. This ensures we don't drop text just because it's
-      // wrapped in a <div> or <span> instead of a <p>.
-      $node.contents().each((_, child) => {
-        if (child.type === 'text') {
-          const text = collapseWhitespace($(child).text());
-          if (text) lines.push(text, '');
-        } else if (child.type === 'tag') {
-          walk($, child as Element, lines);
-        }
-      });
-    }
-  }
-}
-
 /**
- * Converts a crawled HTML page into a title + clean, structure-preserving
- * Markdown body suitable for `ai-core`'s markdown-aware chunker. This is a
- * pragmatic content extractor (main/article detection + noise stripping +
- * heading-aware walk), not a full readability algorithm — good enough for
- * RAG ingestion without pulling in a large dependency.
+ * Extracts the main content of a crawled page as Title + clean Markdown,
+ * working regardless of what tech stack produced the HTML. Three-tier
+ * strategy, each tier a fallback for the one before it:
+ *
+ * 1. Known-platform selectors (WordPress, Docusaurus, MkDocs/Sphinx,
+ *    GitBook, Ghost, Medium, Confluence, Zendesk, Notion, ...) — cheap to
+ *    check, and cleaner than a generic scorer when they hit because
+ *    they're targeted at exactly that platform's markup.
+ * 2. Mozilla's Readability (the algorithm behind Firefox Reader View) —
+ *    scores real DOM structure (text density, link density, class/id
+ *    naming hints) rather than any framework's specific conventions, so it
+ *    works on hand-built HTML, heavyweight CMS themes, and bespoke
+ *    frameworks alike.
+ * 3. Raw `<body>` with just NOISE_SELECTORS stripped — used only when
+ *    neither of the above produced anything, which in practice mostly
+ *    means the page is a near-empty client-rendered shell; see
+ *    `likelyNeedsJsRendering` below for what to do about that.
+ *
+ * This function only ever looks at whatever HTML it's given — it has no
+ * opinion on how that HTML was obtained. Call it once on the plain fetched
+ * response; if `likelyNeedsJsRendering` comes back true and you have a
+ * renderer available (browser-fetch.ts), re-fetch with that and call this
+ * again on the rendered HTML.
  */
-export function extractContent(html: string): ExtractedPage {
-  const $ = cheerio.load(html);
+export function extractContent(html: string, pageUrl: string): ExtractedPage {
+  const platformResult = findPlatformContent(html);
+
+  let contentHtml: string | null = null;
+  let title = '';
+
+  if (platformResult) {
+    contentHtml = platformResult.contentHtml;
+    title = platformResult.title;
+  } else {
+    try {
+      const dom = new JSDOM(html, { url: pageUrl });
+      const reader = new Readability(dom.window.document, { charThreshold: 100 });
+      const article = reader.parse();
+      if (article?.content) {
+        contentHtml = article.content;
+        title = article.title || '';
+      }
+    } catch {
+      // A page malformed enough to make Readability throw still deserves a
+      // best-effort attempt via the raw-body fallback below rather than an
+      // empty result.
+    }
+  }
+
+  const $ = cheerio.load(contentHtml ?? html);
   NOISE_SELECTORS.forEach((selector) => $(selector).remove());
 
-  const title =
-    collapseWhitespace($('title').first().text()) || collapseWhitespace($('h1').first().text());
+  if (!title) {
+    title = $('title').first().text().trim() || $('h1').first().text().trim();
+  }
 
-  const root = selectContentRoot($);
-  const lines: string[] = [];
-  root.contents().each((_, node) => {
-    if (node.type === 'tag') walk($, node as Element, lines);
-  });
+  const root = contentHtml ? $.root() : $('body');
+  const rawMarkdown = htmlToMarkdown($, root);
+  let markdown = sanitizeExtractedText(rawMarkdown);
 
-  const markdown = lines
-    .join('\n')
-    .split('\n')
-    .map((l) => l.trimEnd())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  // Readability (and some platform selectors) treat the page's own H1 as a
+  // separate "title" and exclude it from `.content` — correct for a reader
+  // view, but it means that heading's text (often the single most
+  // topically-important string on the page) would otherwise vanish
+  // entirely rather than just move to metadata. Restore it as the leading
+  // line of the actual embedded content, unless the body already starts
+  // with its own top-level heading (the common case for platform-selector
+  // hits, where the H1 lives inside the matched container).
+  const alreadyStartsWithHeading = /^#\s+\S/.test(markdown);
+  if (!alreadyStartsWithHeading && title && title !== 'Untitled Page') {
+    markdown = markdown ? `# ${title}\n\n${markdown}` : `# ${title}`;
+  }
 
-  return { title: title || 'Untitled Page', markdown };
+  const { looksClientRendered, reason } = detectClientRenderedShell(html, markdown.length);
+
+  return {
+    title: title || 'Untitled Page',
+    markdown,
+    likelyNeedsJsRendering: looksClientRendered,
+    jsRenderingReason: reason,
+  };
 }

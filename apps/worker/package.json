@@ -7,21 +7,22 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@ion-ai/storage": "workspace:*",
+    "@ai-chatbot-platform/ai-core": "workspace:*",
+    "@ion-ai/config": "workspace:*",
+    "@ion-ai/crawler": "workspace:*",
+    "@ion-ai/database": "workspace:*",
+    "@ion-ai/logger": "workspace:*",
     "@ion-ai/parser": "workspace:*",
     "@ion-ai/queue": "workspace:*",
-    "@ion-ai/database": "workspace:*",
-    "@ion-ai/config": "workspace:*",
-    "@ion-ai/logger": "workspace:*",
-    "@ion-ai/crawler": "workspace:*",
-    "@ai-chatbot-platform/ai-core": "workspace:*",
+    "@ion-ai/storage": "workspace:*",
     "bullmq": "^5.8.0",
+    "dotenv": "^16.4.5",
     "ioredis": "^5.4.1",
-    "dotenv": "^16.4.5"
+    "playwright-core": "^1.61.1"
   },
   "devDependencies": {
+    "@types/node": "^20.14.9",
     "tsx": "^4.16.2",
-    "typescript": "^5.5.3",
-    "@types/node": "^20.14.9"
+    "typescript": "^5.5.3"
   }
 }

@@ -18,6 +18,14 @@ interface QueueItem {
  * so the caller (the worker's ingestion pipeline) can persist progress
  * incrementally rather than waiting for the whole crawl to finish.
  *
+ * Content extraction (html-extractor.ts) tries a known-platform selector
+ * first, falls back to Mozilla's Readability for anything else, and — when
+ * neither finds real content and `config.renderJsFallback` is wired up
+ * (see browser-fetch.ts) — falls back again to a real headless-browser
+ * render for client-rendered SPAs. Static HTML sites, heavyweight CMS
+ * themes, doc generators, and JS-rendered apps are all handled by the same
+ * crawl loop; only the extraction/fetch strategy underneath changes.
+ *
  * This class only crawls and extracts content — it has no idea what a
  * KnowledgeSource, Document, or embedding is. That wiring lives in
  * `apps/worker/src/pipeline/crawler.pipeline.ts`, same separation of
@@ -158,7 +166,38 @@ export class WebsiteCrawler {
       }
 
       const html = res.body.toString('utf-8');
-      const { title, markdown } = extractContent(html);
+      let htmlForLinks = html;
+      let finalUrlForLinks = res.finalUrl;
+
+      let { title, markdown, likelyNeedsJsRendering, jsRenderingReason } = extractContent(
+        html,
+        res.finalUrl
+      );
+
+      if (likelyNeedsJsRendering && config.renderJsFallback) {
+        log(
+          'info',
+          `${item.url}: ${jsRenderingReason ?? 'thin content'} — trying JS-rendered fetch.`
+        );
+        try {
+          const rendered = await config.renderJsFallback(item.url);
+          if (rendered?.html) {
+            const reExtracted = extractContent(rendered.html, rendered.finalUrl);
+            // Only switch to the rendered version if it actually found more —
+            // a renderer that itself failed to load real content (blocked
+            // resource, site behind a JS challenge, etc.) shouldn't discard a
+            // static extraction that at least found something.
+            if (reExtracted.markdown.length > markdown.length) {
+              title = reExtracted.title;
+              markdown = reExtracted.markdown;
+              htmlForLinks = rendered.html;
+              finalUrlForLinks = rendered.finalUrl;
+            }
+          }
+        } catch (err: any) {
+          log('warn', `JS-rendering fallback failed for ${item.url}: ${err.message}`);
+        }
+      }
 
       if (!markdown || markdown.length < 20) {
         pagesSkipped++;
@@ -183,7 +222,7 @@ export class WebsiteCrawler {
       }
 
       if (item.depth < config.maxDepth) {
-        const links = extractLinks(html, res.finalUrl);
+        const links = extractLinks(htmlForLinks, finalUrlForLinks);
         for (const link of links) {
           if (visited.has(link)) continue;
           if (config.sameOriginOnly && !isSameOrigin(link, seed)) continue;

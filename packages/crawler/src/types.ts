@@ -39,6 +39,16 @@ export interface CrawlConfig {
   concurrency?: number;
   /** URLs already known to be fully ingested (e.g. from a previous run of the same job); fetched again for link discovery but never re-reported as newly completed. */
   alreadyCompletedUrls?: Iterable<string>;
+  /**
+   * Called when a page's static HTML looks like a client-rendered SPA shell
+   * with no real content in it (see content/spa-detection.ts) — wire this to
+   * `new BrowserRenderer().render(url)` from browser-fetch.ts. Optional: if
+   * omitted, thin/CSR pages are still reported via onPage as COMPLETED (with
+   * whatever little text was found) or SKIPPED (if there was truly nothing) —
+   * never silently dropped — you just won't recover the SPA's real content
+   * without this wired in.
+   */
+  renderJsFallback?: (url: string) => Promise<{ html: string; finalUrl: string } | null>;
 }
 
 export type CrawledPageStatus = 'COMPLETED' | 'FAILED' | 'SKIPPED';
