@@ -21,18 +21,20 @@ interface RawHeaderLine {
  * AST library.
  */
 function stripMarkdownSyntax(text: string): string {
-  return text
-    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, '').trim())
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(\*|_)(.*?)\1/g, '$2')
-    .replace(/^\s{0,3}>\s?/gm, '')
-    .replace(/^\s{0,3}[-*+]\s+/gm, '')
-    .replace(/^\s{0,3}\d+\.\s+/gm, '')
-    .replace(/^-{3,}$/gm, '')
-    .trim();
+  return (
+    text
+      .replace(/```[\s\S]*?```/g, (block) => block.replace(/```/g, '').trim())
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')
+      .replace(/(\*|_)(.*?)\1/g, '$2')
+      .replace(/^\s{0,3}>\s?/gm, '')
+      // We intentionally keep list markers (`-`, `*`, `+`, `1.`) to preserve semantic item boundaries,
+      // but we strip multiple hashes `---` to prevent excessive noise.
+      .replace(/^-{3,}$/gm, '')
+      .trim()
+  );
 }
 
 export class MarkdownParser extends BaseDocumentParser {
@@ -68,25 +70,52 @@ export class MarkdownParser extends BaseDocumentParser {
       }
 
       const pathStack: { level: number; title: string }[] = [];
-      headers.forEach((header, idx) => {
-        while (pathStack.length && pathStack[pathStack.length - 1].level >= header.level) {
-          pathStack.pop();
-        }
-        pathStack.push({ level: header.level, title: header.title });
+      let pendingPrefix = '';
 
+      headers.forEach((header, idx) => {
         const nextLineIndex = idx + 1 < headers.length ? headers[idx + 1].lineIndex : lines.length;
         const bodyLines = lines.slice(header.lineIndex + 1, nextLineIndex);
         const content = normalizeWhitespace(stripMarkdownSyntax(bodyLines.join('\n')));
 
+        if (content.length === 0) {
+          pendingPrefix = pendingPrefix ? `${pendingPrefix} - ${header.title}` : header.title;
+        } else {
+          const combinedTitle = pendingPrefix ? `${pendingPrefix} - ${header.title}` : header.title;
+          pendingPrefix = '';
+
+          while (pathStack.length && pathStack[pathStack.length - 1].level >= header.level) {
+            pathStack.pop();
+          }
+          pathStack.push({ level: header.level, title: combinedTitle });
+
+          sections.push({
+            headerPath: pathStack.map((p) => p.title),
+            headingLevel: header.level,
+            content,
+          });
+        }
+      });
+
+      if (pendingPrefix) {
+        // If the document ended with empty headers, emit them so they aren't lost
+        while (
+          pathStack.length &&
+          pathStack[pathStack.length - 1].level >= headers[headers.length - 1].level
+        ) {
+          pathStack.pop();
+        }
+        pathStack.push({ level: headers[headers.length - 1].level, title: pendingPrefix });
         sections.push({
           headerPath: pathStack.map((p) => p.title),
-          headingLevel: header.level,
-          content,
+          headingLevel: headers[headers.length - 1].level,
+          content: '',
         });
-      });
+      }
     }
 
-    const nonEmptySections = sections.filter((s) => s.content.trim().length > 0);
+    const nonEmptySections = sections.filter(
+      (s) => s.content.trim().length > 0 || s.headerPath.length > 0
+    );
 
     const text = normalizeWhitespace(
       nonEmptySections

@@ -2,7 +2,13 @@ import { assertValidSeedUrl } from './ssrf-guard';
 import { safeFetch } from './safe-fetch';
 import { loadRobotsPolicy } from './robots';
 import { extractContent } from './html-extractor';
-import { normalizeUrl, isSameOrigin, matchesAnyPattern, extractLinks } from './url-utils';
+import {
+  normalizeUrl,
+  isSameOrigin,
+  matchesAnyPattern,
+  extractLinks,
+  getUrlShape,
+} from './url-utils';
 import { CrawlConfig, CrawlCallbacks, CrawlSummary, CRAWLER_DEFAULTS } from './types';
 
 interface QueueItem {
@@ -69,6 +75,8 @@ export class WebsiteCrawler {
     let activeWorkers = 0;
 
     const lastRequestAtByHost = new Map<string, number>();
+    const loggedSpaHosts = new Set<string>();
+    const urlShapeCounts = new Map<string, number>();
 
     const robotsPolicy = config.respectRobotsTxt
       ? await loadRobotsPolicy(seed, config.userAgent, log)
@@ -175,10 +183,13 @@ export class WebsiteCrawler {
       );
 
       if (likelyNeedsJsRendering && config.renderJsFallback) {
-        log(
-          'info',
-          `${item.url}: ${jsRenderingReason ?? 'thin content'} — trying JS-rendered fetch.`
-        );
+        if (!loggedSpaHosts.has(parsedUrl.hostname)) {
+          log(
+            'info',
+            `${item.url}: ${jsRenderingReason ?? 'thin content'} — trying JS-rendered fetch.`
+          );
+          loggedSpaHosts.add(parsedUrl.hostname);
+        }
         try {
           const rendered = await config.renderJsFallback(item.url);
           if (rendered?.html) {
@@ -227,6 +238,12 @@ export class WebsiteCrawler {
           if (visited.has(link)) continue;
           if (config.sameOriginOnly && !isSameOrigin(link, seed)) continue;
           if (pagesDiscovered >= config.maxPages * 5) break; // hard cap on frontier growth for very large/looping sites
+
+          const shape = getUrlShape(link);
+          const count = urlShapeCounts.get(shape) ?? 0;
+          if (count >= 10) continue; // Skip enqueuing if we've already discovered enough pages of this shape
+          urlShapeCounts.set(shape, count + 1);
+
           visited.add(link);
           pagesDiscovered++;
           queue.push({ url: link, depth: item.depth + 1 });

@@ -150,6 +150,39 @@ function walkTable($: CheerioAPI, tableEl: Element, lines: string[]): void {
   lines.push('');
 }
 
+const INLINE_TAGS = new Set([
+  'a',
+  'abbr',
+  'b',
+  'bdi',
+  'bdo',
+  'br',
+  'cite',
+  'code',
+  'data',
+  'dfn',
+  'em',
+  'i',
+  'kbd',
+  'mark',
+  'q',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'sup',
+  'time',
+  'u',
+  'var',
+  'wbr',
+  'img',
+]);
+
 function walkBlock($: CheerioAPI, node: Element, lines: string[]): void {
   const tag = node.tagName?.toLowerCase();
   const $node = $(node);
@@ -224,14 +257,27 @@ function walkBlock($: CheerioAPI, node: Element, lines: string[]): void {
     case 'template':
       return;
     default: {
-      // Generic container (div/section/span/article/etc.) — recurse into
-      // element children. Bare text nodes directly under a container
-      // without an enclosing <p> are intentionally not collected here;
-      // real-world pages almost always wrap meaningful text in a block
-      // element, and picking up stray text nodes tends to duplicate
-      // content already captured by a sibling <p>/<span> more than it
-      // adds anything.
-      $node.children().each((_, child) => walkBlock($, child as Element, lines));
+      let currentInline = '';
+      const flushInline = () => {
+        const text = currentInline.replace(/[ \t]+/g, ' ').trim();
+        if (text) lines.push(text, '');
+        currentInline = '';
+      };
+
+      $node.contents().each((_, child) => {
+        if (child.type === 'text') {
+          currentInline += (child as any).data;
+        } else if (child.type === 'tag') {
+          const childTag = (child as Element).tagName?.toLowerCase();
+          if (INLINE_TAGS.has(childTag)) {
+            currentInline += serializeInline($, child as Element);
+          } else {
+            flushInline();
+            walkBlock($, child as Element, lines);
+          }
+        }
+      });
+      flushInline();
     }
   }
 }

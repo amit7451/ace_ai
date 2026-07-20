@@ -20,8 +20,46 @@ export function normalizeUrl(rawUrl: string): string {
   if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
     url.pathname = url.pathname.slice(0, -1);
   }
+
+  // Strip common tracking parameters to avoid crawling the same page multiple times
+  const noiseParams = [
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_term',
+    'utm_content',
+    'ref',
+    'fbclid',
+    'gclid',
+    'session_id',
+  ];
+  for (const p of noiseParams) {
+    url.searchParams.delete(p);
+  }
+
   url.hostname = url.hostname.toLowerCase();
   return url.toString();
+}
+
+/**
+ * Clusters URLs by their path structure to prevent the crawler from wasting its
+ * budget on thousands of identical page types (e.g., product pages, blog posts).
+ * Replaces dynamic-looking path segments (IDs, slugs, UUIDs) with '*'.
+ */
+export function getUrlShape(urlStr: string): string {
+  try {
+    const url = new URL(urlStr);
+    const parts = url.pathname.split('/').map((part) => {
+      if (part.includes('.') && !part.includes('-')) return part;
+      if (/\d/.test(part)) return '*';
+      if (part.includes('-') && part.length > 12) return '*';
+      if (part.length > 20) return '*';
+      return part;
+    });
+    return parts.join('/');
+  } catch {
+    return '*';
+  }
 }
 
 /** Strips a single leading "www." for comparison purposes only (never for storage/display). */
