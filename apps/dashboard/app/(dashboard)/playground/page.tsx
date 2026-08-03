@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 export default function PlaygroundPage() {
   const [messages, setMessages] = useState<any[]>([]);
@@ -187,7 +188,13 @@ export default function PlaygroundPage() {
               <span className="font-bold mb-1 block text-xs sm:text-sm text-gray-500">
                 {m.role === 'user' ? 'You' : 'AI'}
               </span>
-              <div className="whitespace-pre-wrap">{m.content}</div>
+              {m.role === 'user' ? (
+                <div className="whitespace-pre-wrap">{m.content}</div>
+              ) : (
+                <div className="prose prose-sm max-w-none prose-blue">
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                </div>
+              )}
             </div>
           ))}
           {loading && <div className="text-gray-400 italic text-sm sm:text-base">Thinking...</div>}

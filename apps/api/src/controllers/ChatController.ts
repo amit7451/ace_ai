@@ -38,7 +38,7 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
         await rateLimitService.checkWidgetLimit(widget.id);
       } else {
         // Playground Flow (Authenticated)
-        await request.jwtVerify();
+        await request.jwtVerify({ onlyCookie: true });
         const orgIdHeader = request.headers['x-organization-id'] as string;
         if (!orgIdHeader)
           return reply.status(400).send({ success: false, error: 'Missing x-organization-id' });

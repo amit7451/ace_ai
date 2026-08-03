@@ -1,28 +1,30 @@
+'use client';
+
 export default function SearchPage() {
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1>Knowledge Search (Debugger)</h1>
-      <p>Test your knowledge base retrieval using semantic search.</p>
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-2">Knowledge Search (Debugger)</h1>
+      <p className="text-gray-600 mb-6">
+        Test your knowledge base retrieval using semantic search.
+      </p>
 
-      <div style={{ marginTop: '2rem', padding: '1rem', border: '1px solid #ccc' }}>
-        <h2>Search Query</h2>
-        <form>
+      <div className="p-4 border rounded-md max-w-lg mb-6">
+        <h2 className="text-lg font-semibold mb-3">Search Query</h2>
+        <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
           <input
             type="text"
-            placeholder="What is Ion AI?"
-            style={{ padding: '0.5rem', width: '300px' }}
+            placeholder="What is ModBit?"
+            className="p-2 border rounded-md flex-1 text-sm"
           />
-          <button type="button" style={{ marginLeft: '1rem', padding: '0.5rem' }}>
+          <button type="submit" className="px-4 py-2 bg-zinc-900 text-white text-sm rounded-md">
             Search
           </button>
         </form>
       </div>
 
-      <div style={{ marginTop: '2rem' }}>
-        <h2>Retrieved Chunks</h2>
-        <ul>
-          <li>No search performed yet.</li>
-        </ul>
+      <div>
+        <h2 className="text-lg font-semibold mb-2">Retrieved Chunks</h2>
+        <p className="text-sm text-gray-500">No search performed yet.</p>
       </div>
     </div>
   );

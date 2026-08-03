@@ -20,19 +20,30 @@ export class ChatService {
     }
 
     const llmProvider = (orgConfig.llmProvider || 'openai') as string;
-    let llmApiKey: string;
+    let llmApiKey: string = '';
     let llmProviderName = llmProvider;
     let llmModel = 'gpt-4o-mini';
 
-    if (llmProvider === 'testing') {
-      if (context === 'widget') {
+    if (llmProvider === 'testing' || llmProvider === 'gemini') {
+      llmProviderName = 'gemini';
+      llmModel = 'gemini-2.5-flash';
+      if (context === 'widget' && llmProvider === 'testing') {
         throw new Error(
           'The "testing" provider is only available in the playground. Please configure your own API key for live widgets.'
         );
       }
-      llmProviderName = 'gemini';
-      llmApiKey = process.env.GEMINI_API_KEY || '';
-      llmModel = 'gemini-2.5-flash';
+
+      const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, 'gemini');
+      if (apiKeyRecord) {
+        const { decryptApiKey } = await import('@ion-ai/config');
+        llmApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      } else {
+        llmApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+      }
+
+      if (!llmApiKey) {
+        throw new Error(`API key for provider '${llmProvider}' is not configured.`);
+      }
     } else {
       const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, llmProvider);
       if (!apiKeyRecord) {
@@ -54,14 +65,25 @@ export class ChatService {
     });
 
     const embedderProvider = (orgConfig.embeddingProvider || 'openai') as string;
-    let embedderApiKey: string;
+    let embedderApiKey: string = '';
     let embedderProviderName = embedderProvider;
     let embedderModel = 'text-embedding-3-small';
 
-    if (embedderProvider === 'testing') {
+    if (embedderProvider === 'testing' || embedderProvider === 'gemini') {
       embedderProviderName = 'gemini';
-      embedderApiKey = process.env.GEMINI_API_KEY || '';
       embedderModel = 'gemini-embedding-001';
+
+      const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, 'gemini');
+      if (apiKeyRecord) {
+        const { decryptApiKey } = await import('@ion-ai/config');
+        embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      } else {
+        embedderApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+      }
+
+      if (!embedderApiKey) {
+        throw new Error(`API key for embedding provider '${embedderProvider}' is not configured.`);
+      }
     } else {
       const apiKeyRecord = await chatRepository.getOrganizationApiKey(
         organizationId,

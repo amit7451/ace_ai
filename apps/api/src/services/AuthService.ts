@@ -10,23 +10,38 @@ export class AuthService {
   ) {}
 
   async register(data: RegisterRequest) {
-    const existingUser = await this.userRepository.findByEmail(data.email);
-    if (existingUser) {
-      throw Object.assign(new Error('User already exists'), { statusCode: 400 });
+    let user = await this.userRepository.findByEmail(data.email);
+
+    if (user) {
+      // Existing user account -> Verify password before attaching new organization
+      if (user.passwordHash) {
+        const isValid = await verifyPassword(data.password, user.passwordHash);
+        if (!isValid) {
+          throw Object.assign(new Error('Incorrect password for existing user account.'), {
+            statusCode: 400,
+          });
+        }
+      } else {
+        // Set password if hash missing
+        const newHash = await hashPassword(data.password);
+        await this.userRepository.update(user.id, { passwordHash: newHash });
+      }
+    } else {
+      // New user account -> Create user record in DB
+      const passwordHash = await hashPassword(data.password);
+      user = await this.userRepository.create({
+        email: data.email,
+        name: data.name,
+        passwordHash,
+      });
     }
 
-    const passwordHash = await hashPassword(data.password);
-    const user = await this.userRepository.create({
-      email: data.email,
-      name: data.name,
-      passwordHash,
-    });
-
+    // Create organization and attach user as OWNER
     await this.organizationService.createOrganization(user.id, {
       name: data.organizationName,
     });
 
-    return { id: user.id, email: user.email, name: user.name };
+    return { id: user.id, email: user.email, name: user.name || data.name };
   }
 
   async login(data: LoginRequest) {

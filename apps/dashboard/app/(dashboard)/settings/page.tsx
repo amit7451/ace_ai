@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [newKeyProvider, setNewKeyProvider] = useState('openai');
   const [newKeyValue, setNewKeyValue] = useState('');
   const [savingKey, setSavingKey] = useState(false);
+  const [deletingOrg, setDeletingOrg] = useState(false);
 
   const initialFetchDone = useRef(false);
 
@@ -145,7 +146,7 @@ export default function SettingsPage() {
       if (data.success) {
         setSuccess('API key saved successfully.');
         setNewKeyValue('');
-        fetchData(); // Refresh keys
+        fetchData();
       } else {
         setError(data.error?.message || 'Failed to save API key.');
       }
@@ -182,10 +183,45 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteInstitutionAccount = async () => {
+    const orgId = localStorage.getItem('organizationId');
+    if (!orgId) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to permanently delete this institution account?\n\nThis will permanently remove the institution, all configurations, members, knowledge bases, widgets, and database records. THIS CANNOT BE UNDONE.'
+    );
+    if (!confirmed) return;
+
+    setDeletingOrg(true);
+    setError('');
+
+    try {
+      const res = await fetch(`http://localhost:3001/api/v1/organizations/${orgId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-organization-id': orgId,
+        },
+        credentials: 'include',
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        localStorage.removeItem('organizationId');
+        window.location.href = '/institution';
+      } else {
+        setError(data.error?.message || 'Failed to delete institution account');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred while deleting institution account');
+    } finally {
+      setDeletingOrg(false);
+    }
+  };
+
   const llmProvidersList = [
     { id: 'testing', name: 'Testing Tier (Playground Only)' },
-    { id: 'openai', name: 'OpenAI' },
     { id: 'gemini', name: 'Google Gemini' },
+    { id: 'openai', name: 'OpenAI' },
     { id: 'anthropic', name: 'Anthropic' },
     { id: 'groq', name: 'Groq' },
     { id: 'openrouter', name: 'OpenRouter' },
@@ -194,15 +230,20 @@ export default function SettingsPage() {
 
   const embeddingProvidersList = [
     { id: 'testing', name: 'Testing Tier (Playground Only)' },
-    { id: 'openai', name: 'OpenAI' },
     { id: 'gemini', name: 'Google Gemini' },
+    { id: 'openai', name: 'OpenAI' },
     { id: 'cohere', name: 'Cohere' },
     { id: 'ollama', name: 'Ollama' },
   ];
 
-  const hasLlmKey = llmProvider === 'testing' || apiKeys.some((k) => k.provider === llmProvider);
+  const hasLlmKey =
+    llmProvider === 'testing' ||
+    llmProvider === 'gemini' ||
+    apiKeys.some((k) => k.provider === llmProvider);
   const hasEmbeddingKey =
-    embeddingProvider === 'testing' || apiKeys.some((k) => k.provider === embeddingProvider);
+    embeddingProvider === 'testing' ||
+    embeddingProvider === 'gemini' ||
+    apiKeys.some((k) => k.provider === embeddingProvider);
 
   if (loading) return <div className="p-8">Loading settings...</div>;
 
@@ -370,47 +411,9 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
-
-          <form
-            onSubmit={handleSaveConfig}
-            className="bg-white rounded-lg shadow border p-6 space-y-6"
-          >
-            <h2 className="text-xl font-semibold">Widget Behavior</h2>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">System Prompt</label>
-              <textarea
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={4}
-                className="w-full border-gray-300 rounded-md shadow-sm p-2 border"
-                placeholder="You are a helpful assistant..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Welcome Message
-              </label>
-              <input
-                type="text"
-                value={welcomeMessage}
-                onChange={(e) => setWelcomeMessage(e.target.value)}
-                className="w-full border-gray-300 rounded-md shadow-sm p-2 border"
-                placeholder="Hi there! How can I help?"
-              />
-            </div>
-            <div className="pt-4 border-t">
-              <button
-                type="submit"
-                disabled={saving}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Behavior'}
-              </button>
-            </div>
-          </form>
         </div>
 
-        {/* Right Column: API Keys */}
+        {/* Right Column: API Keys & Danger Zone */}
         <div className="space-y-8">
           <div className="bg-white rounded-lg shadow border p-6 space-y-6">
             <h2 className="text-xl font-semibold">Configured API Keys</h2>
@@ -486,6 +489,23 @@ export default function SettingsPage() {
                 {savingKey ? 'Saving Key...' : 'Save API Key'}
               </button>
             </form>
+          </div>
+
+          {/* Danger Zone: Delete Institution Account */}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 space-y-4">
+            <h2 className="text-lg font-bold text-red-900">Danger Zone</h2>
+            <p className="text-xs text-red-700 leading-relaxed">
+              Permanently delete this institution account and all associated knowledge bases,
+              widgets, members, and database records from PostgreSQL.
+            </p>
+            <button
+              type="button"
+              onClick={handleDeleteInstitutionAccount}
+              disabled={deletingOrg}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-md text-sm transition-colors disabled:opacity-50"
+            >
+              {deletingOrg ? 'Deleting Account...' : 'Delete Institution Account'}
+            </button>
           </div>
         </div>
       </div>

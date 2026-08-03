@@ -1,4 +1,5 @@
 import { prisma } from '@ion-ai/database';
+import { resolveEmbeddingProvider } from '../lib/resolve-embedding-provider';
 import { IStorageProvider } from '@ion-ai/storage';
 import { ParserFactory } from '@ion-ai/parser';
 import {
@@ -67,34 +68,7 @@ export class IngestionPipeline {
 
       // 4. Embed (via ai-core)
       // We need organization config for embedding provider
-      const orgConfig = await prisma.organizationConfiguration.findUnique({
-        where: { organizationId: job.organizationId },
-      });
-      const providerNameRaw = (orgConfig?.embeddingProvider ?? 'openai') as string;
-      let providerName = providerNameRaw;
-      let model = 'text-embedding-3-small';
-      let apiKey = '';
-
-      if (providerNameRaw === 'testing') {
-        providerName = 'gemini';
-        model = 'gemini-embedding-001';
-        apiKey = env.GEMINI_API_KEY || '';
-      } else {
-        const apiKeyRecord = await prisma.organizationApiKey.findUnique({
-          where: {
-            organizationId_provider: {
-              organizationId: job.organizationId,
-              provider: providerNameRaw,
-            },
-          },
-        });
-        if (!apiKeyRecord) {
-          throw new Error(`API key for embedding provider '${providerNameRaw}' is not configured.`);
-        }
-        const { decryptApiKey } = await import('@ion-ai/config');
-        apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
-        model = providerNameRaw === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
-      }
+      const { providerName, model, apiKey } = await resolveEmbeddingProvider(job.organizationId);
 
       const embedder = EmbeddingProviderFactory.create({
         provider: providerName as any,
@@ -219,16 +193,12 @@ export class IngestionPipeline {
           url: this.qdrantUrl,
         });
 
-        // Get chunks to find vector IDs
-        const chunks = await prisma.chunk.findMany({
-          where: { documentId: job.documentId },
-          select: { vectorId: true },
+        // Use deleteByFilter on knowledgeSourceId to ensure all vectors in Qdrant are deleted,
+        // even if Postgres chunks are missing (e.g., due to a crash between upserting to Qdrant
+        // and inserting chunks to Postgres during ingestion).
+        await vectorStore.deleteByFilter(collectionName, {
+          must: [{ key: 'knowledgeSourceId', match: { value: job.knowledgeSourceId } }],
         });
-        const vectorIds = chunks.map((c) => c.vectorId).filter(Boolean) as string[];
-
-        if (vectorIds.length > 0) {
-          await vectorStore.delete(collectionName, vectorIds);
-        }
       } catch (e: any) {
         console.error(`Qdrant Deletion Error:`, e);
         throw e;

@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { organizationService } from '../di';
 import { CreateOrganizationRequestSchema } from '@ion-ai/contracts';
 
@@ -22,8 +22,24 @@ export async function organizationController(fastify: FastifyInstance) {
     orgRoutes.addHook('preHandler', orgRoutes.requireOrganization);
 
     orgRoutes.get('/:orgId', async (request: FastifyRequest) => {
-      // request.organization is populated by requireOrganization hook
       return { success: true, data: request.organization };
+    });
+
+    orgRoutes.delete('/:orgId', async (request: FastifyRequest, reply: FastifyReply) => {
+      const orgId = (request.params as any).orgId || request.organization?.id;
+      await organizationService.deleteOrganization(request.user.sub, orgId);
+
+      const remaining = await organizationService
+        .getMyOrganizations(request.user.sub)
+        .catch(() => []);
+      if (remaining.length === 0) {
+        reply.clearCookie('access_token', { path: '/' });
+      }
+
+      return {
+        success: true,
+        message: 'Organization and associated account deleted successfully from database',
+      };
     });
   });
 }

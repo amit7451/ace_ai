@@ -22,4 +22,8 @@ export class OrganizationRepository {
   async create(data: Prisma.OrganizationCreateInput): Promise<Organization> {
     return prisma.organization.create({ data });
   }
+
+  async delete(id: string): Promise<Organization> {
+    return prisma.organization.delete({ where: { id } });
+  }
 }
