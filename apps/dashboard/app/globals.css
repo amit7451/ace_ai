@@ -26,10 +26,11 @@ body {
 
 .cursor-blink::after {
   content: '▋';
-  display: inline-block;
+  display: inline;
   margin-left: 2px;
   animation: blink 1.1s infinite steps(1);
   color: #e4e4e7;
+  vertical-align: baseline;
 }
 
 @keyframes blink {
@@ -117,4 +118,304 @@ body {
   height: 6px;
   border-bottom: 2px solid #a1a1aa;
   border-right: 2px solid #a1a1aa;
+}
+
+/* ── Scroll arrow (↓ hero bottom indicator) ────────────── */
+.scroll-arrow-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: #3f3f46;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.scroll-arrow-btn:hover {
+  color: #71717a;
+}
+.scroll-arrow-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid #27272a;
+  border-radius: 50%;
+  animation: ring-pulse 2.4s ease-in-out infinite;
+}
+@keyframes ring-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.12); }
+}
+.scroll-arrow-icon {
+  position: relative;
+  z-index: 1;
+  animation: arrow-bob 2.4s ease-in-out infinite;
+}
+@keyframes arrow-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+
+/* ── How It Works section — full viewport page ─────────── */
+.how-it-works-section {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  border-top: 1px solid #18181b;
+}
+
+.hiw-header {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.hiw-heading {
+  font-size: clamp(2.8rem, 7vw, 5rem);
+  font-weight: 800;
+  color: #e4e4e7;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  margin-bottom: 16px;
+}
+
+.hiw-subheading {
+  font-size: 0.88rem;
+  color: #52525b;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1px;
+  background: #1c1c1f;
+  border: 1px solid #1c1c1f;
+  border-radius: 4px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 1040px;
+}
+
+.step-card {
+  position: relative;
+  padding: 56px 36px 52px;
+  background: #08080a;
+  text-align: left;
+  overflow: hidden;
+  transition: background 0.2s ease;
+}
+
+.step-card:hover {
+  background: #0c0c0f;
+}
+
+.step-bg-number {
+  position: absolute;
+  top: -16px;
+  right: 20px;
+  font-size: 8rem;
+  font-weight: 900;
+  color: #111114;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-mono);
+  letter-spacing: -0.05em;
+}
+
+.step-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #27272a;
+  color: #a1a1aa;
+  margin-bottom: 28px;
+  flex-shrink: 0;
+}
+
+.step-body {
+  position: relative;
+  z-index: 1;
+}
+
+.step-subtitle {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #52525b;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+}
+
+.step-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #e4e4e7;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  line-height: 1.25;
+}
+
+.step-desc {
+  font-size: 0.84rem;
+  color: #71717a;
+  line-height: 1.7;
+  letter-spacing: 0.03em;
+  font-family: var(--font-mono);
+}
+
+/* thin top accent line on hover */
+.step-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #3f3f46 50%, transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.step-card:hover::before {
+  opacity: 1;
+}
+
+/* ── Why ModBit section ──────────────────────────────────── */
+.why-section {
+  position: relative;
+  z-index: 10;
+  padding: 100px 24px 120px;
+  border-top: 1px solid #18181b;
+}
+
+.why-header {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 72px;
+}
+
+.why-heading {
+  font-size: clamp(2.8rem, 7vw, 5rem);
+  font-weight: 800;
+  color: #e4e4e7;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  margin-bottom: 20px;
+}
+
+.why-sub {
+  font-size: 0.9rem;
+  color: #52525b;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  line-height: 1.75;
+}
+
+.values-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1px;
+  background: #1c1c1f;
+  border: 1px solid #1c1c1f;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.value-card {
+  background: #08080a;
+  padding: 40px 32px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transition: background 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.value-card:hover {
+  background: #0c0c0f;
+}
+
+/* top shimmer on hover */
+.value-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #3f3f46 50%, transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.value-card:hover::before {
+  opacity: 1;
+}
+
+.value-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.value-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #27272a;
+  color: #71717a;
+  flex-shrink: 0;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.value-card:hover .value-icon {
+  color: #a1a1aa;
+  border-color: #3f3f46;
+}
+
+.value-tag {
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #3f3f46;
+  font-family: var(--font-mono);
+  transition: color 0.2s ease;
+}
+
+.value-card:hover .value-tag {
+  color: #52525b;
+}
+
+.value-heading {
+  font-size: 1.18rem;
+  font-weight: 700;
+  color: #d4d4d8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  margin-bottom: 14px;
+}
+
+.value-body {
+  font-size: 0.78rem;
+  color: #52525b;
+  font-family: var(--font-mono);
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
+}
+
+.value-card:hover .value-body {
+  color: #71717a;
 }
