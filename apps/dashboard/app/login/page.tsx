@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -78,11 +79,18 @@ export default function LoginPage() {
 
       <main className="relative z-10 max-w-md w-full mx-auto px-6 pt-32 pb-16 flex-1 flex flex-col justify-center">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-[0.2em] text-zinc-100 uppercase">ModBit</h1>
-          <p className="text-xs text-zinc-400 font-mono tracking-wider mt-2">
-            Sign in to your account
-          </p>
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="flex items-center gap-3 mb-2">
+            <Image
+              src="/modbit.webp"
+              alt="ModBit Logo"
+              width={36}
+              height={36}
+              className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]"
+            />
+            <h1 className="text-3xl font-bold tracking-[0.2em] text-zinc-100 uppercase">ModBit</h1>
+          </div>
+          <p className="text-xs text-zinc-400 font-mono tracking-wider">Sign in to your account</p>
         </div>
 
         {/* Auth Mode Toggle Tabs */}

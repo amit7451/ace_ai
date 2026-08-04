@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -178,9 +179,18 @@ function RegisterForm() {
   return (
     <main className="relative z-10 max-w-lg w-full mx-auto px-6 pt-28 pb-16 flex-1 flex flex-col justify-center">
       {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold tracking-[0.2em] text-zinc-100 uppercase">ModBit</h1>
-        <p className="text-xs text-zinc-400 font-mono tracking-wider mt-2">
+      <div className="text-center mb-6 flex flex-col items-center">
+        <div className="flex items-center gap-3 mb-2">
+          <Image
+            src="/modbit.webp"
+            alt="ModBit Logo"
+            width={36}
+            height={36}
+            className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]"
+          />
+          <h1 className="text-3xl font-bold tracking-[0.2em] text-zinc-100 uppercase">ModBit</h1>
+        </div>
+        <p className="text-xs text-zinc-400 font-mono tracking-wider">
           {step === 1
             ? 'Step 1 of 2: Create Account & Institution'
             : 'Step 2 of 2: Institution AI Configuration'}

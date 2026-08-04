@@ -18,6 +18,10 @@ const shareTechMono = Share_Tech_Mono({
 export const metadata: Metadata = {
   title: 'ModBit // Modular Computing Protocol',
   description: 'ModBit next-generation modular computing & institutional protocol framework.',
+  icons: {
+    icon: '/modbit.webp',
+    apple: '/modbit.webp',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

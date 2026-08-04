@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -100,9 +101,18 @@ function InstitutionContent() {
     <main className="relative z-10 max-w-3xl w-full mx-auto px-6 pt-32 pb-16 flex-1 flex flex-col justify-center">
       {/* Header */}
       <div className="mb-8 text-center sm:text-left">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-[0.2em] text-zinc-100 uppercase">
-          ModBit // INSTITUTION
-        </h1>
+        <div className="flex items-center justify-center sm:justify-start gap-3">
+          <Image
+            src="/modbit.webp"
+            alt="ModBit Logo"
+            width={36}
+            height={36}
+            className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]"
+          />
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-[0.2em] text-zinc-100 uppercase">
+            ModBit // INSTITUTION
+          </h1>
+        </div>
         <p className="text-xs text-zinc-400 font-mono tracking-wider mt-2">
           Select an institution to open dashboard or manage account
         </p>

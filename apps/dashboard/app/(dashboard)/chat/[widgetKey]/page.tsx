@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,8 +80,15 @@ export default function HostedChatPage({ params }: { params: { widgetKey: string
 
   return (
     <div className="flex flex-col h-screen w-full max-w-3xl mx-auto bg-white sm:shadow-lg sm:border sm:rounded-lg overflow-hidden my-0 sm:my-8">
-      <div className="bg-[#08080a] text-zinc-100 p-4 font-bold text-lg flex items-center shadow-md font-mono tracking-widest uppercase">
-        ModBit Chat Support
+      <div className="bg-[#08080a] text-zinc-100 p-4 font-bold text-lg flex items-center gap-3 shadow-md font-mono tracking-widest uppercase">
+        <Image
+          src="/modbit.webp"
+          alt="ModBit Logo"
+          width={24}
+          height={24}
+          className="w-6 h-6 object-contain"
+        />
+        <span>ModBit Chat Support</span>
       </div>
       <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 font-mono">
         {messages.length === 0 && (

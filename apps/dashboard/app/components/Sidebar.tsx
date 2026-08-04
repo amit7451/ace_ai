@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -74,7 +75,16 @@ export default function Sidebar() {
   return (
     <aside className="w-64 bg-zinc-950 text-zinc-200 border-r border-zinc-800 flex flex-col hidden sm:flex font-mono">
       <div className="p-6 border-b border-zinc-800 font-bold text-xl tracking-[0.2em] text-zinc-100 flex items-center justify-between">
-        <span>ModBit</span>
+        <div className="flex items-center gap-2.5">
+          <Image
+            src="/modbit.webp"
+            alt="ModBit Logo"
+            width={24}
+            height={24}
+            className="w-6 h-6 object-contain drop-shadow-[0_0_6px_rgba(255,255,255,0.2)]"
+          />
+          <span>ModBit</span>
+        </div>
         <span className="text-[10px] text-zinc-500 font-mono font-normal">// DASHBOARD</span>
       </div>
 
