@@ -52,4 +52,17 @@ export async function configurationController(fastify: FastifyInstance) {
     );
     return { success: true };
   });
+
+  fastify.get('/models', async (request: FastifyRequest) => {
+    const { provider, type } = request.query as { provider?: string; type?: 'llm' | 'embedding' };
+    if (!provider) {
+      return { success: false, error: { message: 'Provider query param is required' } };
+    }
+    const result = await configurationService.getAvailableModels(
+      request.organization!.id,
+      provider,
+      type || 'llm'
+    );
+    return { success: true, data: result };
+  });
 }

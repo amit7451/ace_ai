@@ -1,6 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { chatService, conversationService, widgetService, rateLimitService } from '@ion-ai/chat';
+import {
+  chatService,
+  conversationService,
+  widgetService,
+  rateLimitService,
+  LLMError,
+  LLMRateLimitError,
+} from '@ion-ai/chat';
 import crypto from 'crypto';
 
 export const ChatController: FastifyPluginAsync = async (fastify) => {
@@ -21,8 +28,8 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
 
     let organizationId = '';
     let deploymentId = '';
+    const isWidget = !!widgetKey;
 
-    // Auth & Rate Limiting
     const visitorIp = request.ip || '0.0.0.0';
     const ipHash = crypto.createHash('sha256').update(visitorIp).digest('hex');
     const userAgent = request.headers['user-agent'] || 'unknown';
@@ -58,7 +65,6 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
 
       // Get or Create Conversation
       if (!conversationId) {
-        // Find or create visitor session
         const visitor = await chatService.getOrCreateVisitorSession(
           organizationId,
           ipHash,
@@ -90,21 +96,71 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
       const stream = chatResult.stream;
       const welcomeMessage = chatResult.welcomeMessage;
 
-      // Send conversation ID first so client knows it
+      // Send metadata event
       reply.raw.write(
-        `data: ${JSON.stringify({ type: 'metadata', conversationId, welcomeMessage })}\n\n`
+        `data: ${JSON.stringify({
+          type: 'metadata',
+          conversationId,
+          welcomeMessage,
+          institutionSupport: chatResult.institutionSupport,
+        })}\n\n`
       );
 
       for await (const chunk of stream) {
         reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
     } catch (err: any) {
-      if (!isStreaming) {
-        return reply.status(500).send({ success: false, error: err.message });
+      const institutionSupport = organizationId
+        ? await chatService.getInstitutionDetails(organizationId).catch(() => ({}))
+        : {};
+
+      let structuredError: any;
+
+      if (err instanceof LLMError) {
+        structuredError = err.toStructuredAIError({
+          clientContext: isWidget ? 'widget' : 'playground',
+          institutionSupport,
+        });
+      } else if (err.statusCode === 429) {
+        const keySource = err.keySource || 'SYSTEM_FREE_TIER';
+        const rateErr = new LLMRateLimitError({
+          provider: 'system',
+          keySource,
+          retryAfterMs: err.retryAfterMs || 60000,
+          institutionSupport,
+        });
+        structuredError = rateErr.toStructuredAIError({
+          clientContext: isWidget ? 'widget' : 'playground',
+          keySource,
+          institutionSupport,
+        });
       } else {
-        reply.raw.write(
-          `data: ${JSON.stringify({ type: 'error', error: err.message || 'Stream failed' })}\n\n`
-        );
+        structuredError = {
+          code: 'CHAT_ERROR',
+          category: 'UNKNOWN',
+          message: err.message || 'An unexpected error occurred during chat stream.',
+          keySource: 'SYSTEM_FREE_TIER',
+          provider: 'system',
+          institutionSupport,
+          actionableResolution: {
+            type: 'RETRY_NOW',
+            title: 'Request Failed',
+            description: err.message || 'An unexpected error occurred.',
+            primaryButton: {
+              label: 'Retry',
+              action: 'RETRY_NOW',
+            },
+          },
+        };
+      }
+
+      if (!isStreaming) {
+        return reply.status(err.statusCode || 500).send({
+          success: false,
+          error: structuredError,
+        });
+      } else {
+        reply.raw.write(`data: ${JSON.stringify({ type: 'error', error: structuredError })}\n\n`);
       }
     } finally {
       if (isStreaming) {
@@ -125,12 +181,22 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
 
     try {
       const widget = await widgetService.validateWidgetKey(widgetKey, request.headers.origin);
-      const welcomeMessage = await chatService.getWelcomeMessage(widget.deployment.organizationId);
+      const orgId = widget.deployment.organizationId;
+      const welcomeMessage = await chatService.getWelcomeMessage(orgId);
+      const institutionDetails = await chatService.getInstitutionDetails(orgId);
 
       return reply.send({
         success: true,
         data: {
           welcomeMessage,
+          institutionName:
+            institutionDetails.institutionName ||
+            widget.deployment.organization?.name ||
+            'Institution Support',
+          supportEmail: institutionDetails.supportEmail,
+          supportWebsite: institutionDetails.supportWebsite,
+          supportPhone: institutionDetails.supportPhone,
+          introductoryMessage: institutionDetails.introductoryMessage || welcomeMessage,
         },
       });
     } catch (err: any) {

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface CrawledPage {
@@ -36,13 +38,6 @@ interface CrawlJobDetail {
   finishedAt: string | null;
   pages: CrawledPage[];
 }
-
-const PAGE_STATUS_STYLES: Record<CrawledPage['status'], string> = {
-  PENDING: 'bg-gray-100 text-gray-600',
-  COMPLETED: 'bg-green-100 text-green-700',
-  FAILED: 'bg-red-100 text-red-700',
-  SKIPPED: 'bg-yellow-100 text-yellow-800',
-};
 
 export default function CrawlerDetailPage() {
   const params = useParams();
@@ -77,9 +72,6 @@ export default function CrawlerDetailPage() {
     if (!id) return;
     fetchOnce();
 
-    // Live progress via SSE while the job can still change; the endpoint
-    // itself closes the stream once status settles, so there's nothing to
-    // tear down beyond the EventSource on unmount.
     const es = new EventSource(`${API_URL}/api/v1/crawlers/${id}/stream`, {
       withCredentials: true,
     } as any);
@@ -95,13 +87,8 @@ export default function CrawlerDetailPage() {
           es.close();
         }
       } catch {
-        // ignore malformed keep-alive/comment frames
+        // ignore malformed frames
       }
-    };
-    es.onerror = () => {
-      // Browsers auto-reconnect EventSource on transient errors; if the
-      // job has already finished the endpoint will have closed cleanly, so
-      // this mainly guards against a genuinely dropped connection.
     };
 
     return () => {
@@ -138,64 +125,71 @@ export default function CrawlerDetailPage() {
     }
   };
 
-  if (loading) return <div className="p-8 max-w-4xl mx-auto text-sm text-gray-500">Loading...</div>;
+  if (loading)
+    return (
+      <div className="p-8 max-w-4xl mx-auto text-xs text-zinc-500 font-mono animate-pulse">
+        LOADING CRAWLER DETAILS...
+      </div>
+    );
   if (error && !crawler)
-    return <div className="p-8 max-w-4xl mx-auto text-sm text-red-600">{error}</div>;
+    return (
+      <div className="p-8 max-w-4xl mx-auto text-xs text-red-400 font-mono border border-red-900/60 bg-red-950/30">
+        {error}
+      </div>
+    );
   if (!crawler) return null;
 
   const isActive = crawler.status === 'PENDING' || crawler.status === 'RUNNING';
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <Link href="/crawlers" className="text-sm text-gray-500 hover:underline">
-        ← Back to crawlers
+    <div className="p-8 max-w-4xl mx-auto space-y-6 font-mono text-zinc-200">
+      <Link href="/crawlers" className="text-xs text-zinc-400 hover:text-white underline block">
+        ← Back to Crawlers
       </Link>
 
-      <div className="flex items-start justify-between mt-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 break-all">{crawler.url}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Started {crawler.startedAt ? new Date(crawler.startedAt).toLocaleString() : '—'}
-            {crawler.finishedAt && ` · Finished ${new Date(crawler.finishedAt).toLocaleString()}`}
+          <h1 className="text-xl font-bold tracking-[0.15em] text-zinc-100 uppercase break-all">
+            {crawler.url}
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            Started: {crawler.startedAt ? new Date(crawler.startedAt).toLocaleString() : '—'}
+            {crawler.finishedAt && ` · Finished: ${new Date(crawler.finishedAt).toLocaleString()}`}
           </p>
         </div>
-        <div className="space-x-2">
+        <div className="flex items-center gap-2">
           {crawler.status === 'FAILED' && (
             <button
               onClick={() => runAction('retry')}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-1.5 modbit-btn-secondary text-xs uppercase tracking-wider"
             >
-              Retry
+              [ RETRY ]
             </button>
           )}
           {isActive && (
             <button
               onClick={() => runAction('cancel')}
-              className="px-3 py-1.5 text-sm border border-yellow-300 text-yellow-700 rounded-md hover:bg-yellow-50"
+              className="px-4 py-1.5 text-xs font-mono text-yellow-400 hover:text-yellow-300 border border-yellow-800/80 bg-yellow-950/40 uppercase tracking-wider"
             >
-              Cancel
+              [ CANCEL ]
             </button>
           )}
           {!isActive && (
             <button
               onClick={() => {
-                if (
-                  confirm(
-                    'Delete this crawl history? Knowledge already added stays in your knowledge base.'
-                  )
-                ) {
+                if (confirm('Delete this crawl job history?')) {
                   runAction('delete');
                 }
               }}
-              className="px-3 py-1.5 text-sm border border-red-300 text-red-600 rounded-md hover:bg-red-50"
+              className="px-4 py-1.5 text-xs font-mono text-red-400 hover:text-red-300 border border-red-900/60 hover:bg-red-950/40 uppercase tracking-wider"
             >
-              Delete
+              [ DELETE ]
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Stat label="Status" value={crawler.status} />
         <Stat label="Discovered" value={String(crawler.pagesDiscovered)} />
         <Stat label="Ingested" value={String(crawler.pagesCrawled)} />
@@ -207,58 +201,75 @@ export default function CrawlerDetailPage() {
       </div>
 
       {crawler.errorDetails && (
-        <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+        <div className="p-3 bg-red-950/30 border border-red-900/60 text-xs text-red-400">
           {crawler.errorDetails}
         </div>
       )}
 
-      <div className="mb-4 text-xs text-gray-500 space-x-3">
-        <span>Max pages: {crawler.maxPages}</span>
-        <span>Max depth: {crawler.maxDepth}</span>
-        <span>Robots.txt: {crawler.respectRobotsTxt ? 'respected' : 'ignored'}</span>
-        <span>Scope: {crawler.sameOriginOnly ? 'same site only' : 'follows external links'}</span>
+      <div className="text-xs text-zinc-500 space-x-4">
+        <span>Max Pages: {crawler.maxPages}</span>
+        <span>Max Depth: {crawler.maxDepth}</span>
+        <span>Robots.txt: {crawler.respectRobotsTxt ? 'Respected' : 'Ignored'}</span>
       </div>
 
-      <h2 className="text-sm font-medium text-gray-900 mb-2">Pages ({crawler.pages.length})</h2>
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">URL</th>
-              <th className="px-4 py-2 font-medium">Depth</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Detail</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {crawler.pages.length === 0 && (
+      <div className="space-y-3 pt-2">
+        <h2 className="text-sm font-bold text-zinc-200 uppercase tracking-wider">
+          Crawled Pages ({crawler.pages.length})
+        </h2>
+        <div className="modbit-card border border-zinc-800 corner-border overflow-x-auto">
+          <table className="min-w-full divide-y divide-zinc-800 text-xs">
+            <thead className="bg-zinc-950/90">
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                  {isActive
-                    ? 'Waiting for the first page...'
-                    : 'No pages were recorded for this crawl.'}
-                </td>
+                <th className="px-4 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                  Page URL
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                  Depth
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                  Detail
+                </th>
               </tr>
-            )}
-            {crawler.pages.map((p) => (
-              <tr key={p.id}>
-                <td className="px-4 py-2 break-all">{p.url}</td>
-                <td className="px-4 py-2 text-gray-500">{p.depth}</td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${PAGE_STATUS_STYLES[p.status]}`}
-                  >
-                    {p.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-gray-500">
-                  {p.httpStatus ? `HTTP ${p.httpStatus}` : ''}
-                  {p.errorMessage && <span className="text-red-600"> — {p.errorMessage}</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/80 bg-zinc-950/40">
+              {crawler.pages.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                    {isActive
+                      ? 'Waiting for initial page discovery...'
+                      : 'No pages recorded for this crawl job.'}
+                  </td>
+                </tr>
+              )}
+              {crawler.pages.map((p) => (
+                <tr key={p.id} className="hover:bg-zinc-900/30 transition-colors">
+                  <td className="px-4 py-3 font-bold text-zinc-200 break-all">{p.url}</td>
+                  <td className="px-4 py-3 text-zinc-400">{p.depth}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-bold border uppercase tracking-wider ${
+                        p.status === 'COMPLETED'
+                          ? 'border-emerald-800/80 bg-emerald-950/40 text-emerald-400'
+                          : p.status === 'FAILED'
+                            ? 'border-red-900/60 bg-red-950/40 text-red-400'
+                            : 'border-zinc-700 bg-zinc-900 text-zinc-400'
+                      }`}
+                    >
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500">
+                    {p.httpStatus ? `HTTP ${p.httpStatus}` : ''}
+                    {p.errorMessage && <span className="text-red-400"> — {p.errorMessage}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -266,9 +277,9 @@ export default function CrawlerDetailPage() {
 
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="border border-gray-200 rounded-lg p-3">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`text-lg font-semibold ${highlight ? 'text-red-600' : 'text-gray-900'}`}>
+    <div className="modbit-card border border-zinc-800 p-4 corner-border">
+      <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{label}</p>
+      <p className={`text-xl font-bold mt-1 ${highlight ? 'text-red-400' : 'text-zinc-100'}`}>
         {value}
       </p>
     </div>

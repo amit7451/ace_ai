@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react';
 
+export const dynamic = 'force-dynamic';
+
 interface Member {
-  id: string; // the organizationMember ID or user ID?
+  id: string;
   userId: string;
   role: string;
   status: string;
@@ -26,7 +28,6 @@ export default function MembersPage() {
   const [inviteSuccess, setInviteSuccess] = useState('');
 
   const [currentUserId, setCurrentUserId] = useState<string>('');
-
   const initialFetchDone = useRef(false);
 
   useEffect(() => {
@@ -137,41 +138,61 @@ export default function MembersPage() {
 
   if (loading) {
     return (
-      <div className="p-8 max-w-5xl mx-auto flex items-center justify-center min-h-[50vh]">
-        <p className="text-gray-500">Loading members...</p>
+      <div className="p-8 max-w-5xl mx-auto flex items-center justify-center min-h-[50vh] font-mono text-xs text-zinc-500 animate-pulse">
+        LOADING MEMBERS...
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Organization Members</h1>
+    <div className="p-8 max-w-5xl mx-auto space-y-6 font-mono text-zinc-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-[0.15em] text-zinc-100 uppercase">
+            ORGANIZATION MEMBERS
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            Manage team access roles and member invitations
+          </p>
+        </div>
+      </div>
 
-      {error && <div className="mb-8 p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
-
+      {error && (
+        <div className="p-3 border border-red-900/60 bg-red-950/30 text-red-400 text-xs">
+          {error}
+        </div>
+      )}
       {inviteSuccess && (
-        <div className="mb-8 p-4 bg-green-50 text-green-700 rounded-md">{inviteSuccess}</div>
+        <div className="p-3 border border-emerald-800/80 bg-emerald-950/40 text-emerald-300 text-xs">
+          ✓ {inviteSuccess}
+        </div>
       )}
 
       {canManage && (
-        <div className="bg-white p-6 rounded-lg shadow border mb-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Invite New Member</h2>
-          <form onSubmit={handleInvite} className="flex gap-4 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <div className="modbit-card p-6 border border-zinc-800 corner-border space-y-4">
+          <h2 className="text-xs font-bold text-zinc-100 uppercase tracking-wider border-b border-zinc-800 pb-3">
+            INVITE NEW TEAM MEMBER
+          </h2>
+          <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-[11px] tracking-widest text-zinc-400 uppercase mb-1">
+                Email Address
+              </label>
               <input
                 type="email"
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3.5 py-2.5 modbit-input text-xs"
                 placeholder="colleague@example.com"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <div className="w-full sm:w-44">
+              <label className="block text-[11px] tracking-widest text-zinc-400 uppercase mb-1">
+                Role Access
+              </label>
               <select
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                className="w-full px-3.5 py-2.5 modbit-input text-xs bg-zinc-950"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
               >
@@ -183,75 +204,71 @@ export default function MembersPage() {
             <button
               type="submit"
               disabled={inviting || !inviteEmail}
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-6 py-2.5 modbit-btn-primary text-xs uppercase tracking-wider disabled:opacity-50 w-full sm:w-auto shrink-0"
             >
-              {inviting ? 'Sending...' : 'Send Invite'}
+              {inviting ? '[ SENDING... ]' : '[ SEND INVITE ]'}
             </button>
           </form>
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow border overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="modbit-card border border-zinc-800 corner-border overflow-x-auto">
+        <table className="min-w-full divide-y divide-zinc-800 text-xs">
+          <thead className="bg-zinc-950/90">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                User
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                Member User
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Role
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Joined
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                Joined Date
               </th>
               {canManage && (
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-right font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                   Actions
                 </th>
               )}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-zinc-800/80 bg-zinc-950/40">
             {members.map((member) => (
-              <tr key={member.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {member.user?.name || 'Unknown'}
-                      </div>
-                      <div className="text-sm text-gray-500">{member.user?.email || 'N/A'}</div>
-                    </div>
+              <tr key={member.id} className="hover:bg-zinc-900/30 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="font-bold text-zinc-100">
+                    {member.user?.name || 'Unknown User'}
                   </div>
+                  <div className="text-zinc-500 text-[11px]">{member.user?.email || 'N/A'}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                <td className="px-6 py-4">
+                  <span className="px-2 py-0.5 text-[10px] font-bold border border-zinc-700 bg-zinc-900 text-zinc-300 uppercase tracking-wider">
                     {member.role}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-6 py-4">
                   <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    className={`px-2 py-0.5 text-[10px] font-bold border uppercase tracking-wider ${
                       member.status === 'ACTIVE'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                        ? 'border-emerald-800/80 bg-emerald-950/40 text-emerald-400'
+                        : 'border-yellow-800/80 bg-yellow-950/40 text-yellow-400'
                     }`}
                   >
                     {member.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 text-zinc-500">
                   {new Date(member.createdAt).toLocaleDateString()}
                 </td>
                 {canManage && (
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 text-right">
                     {member.userId !== currentUserId && member.role !== 'OWNER' && (
                       <button
                         onClick={() => handleRemove(member.userId)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-400 hover:text-red-300 underline text-[11px]"
                       >
                         Remove
                       </button>
@@ -262,8 +279,8 @@ export default function MembersPage() {
             ))}
             {members.length === 0 && (
               <tr>
-                <td colSpan={canManage ? 5 : 4} className="px-6 py-8 text-center text-gray-500">
-                  No members found.
+                <td colSpan={canManage ? 5 : 4} className="px-6 py-8 text-center text-zinc-500">
+                  No members found for this workspace.
                 </td>
               </tr>
             )}

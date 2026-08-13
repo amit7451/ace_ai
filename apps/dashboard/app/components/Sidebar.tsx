@@ -1,65 +1,52 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
+  const { institutions, exitInstitution, logout } = useAuth();
+  const [orgName, setOrgName] = useState<string>('');
+
+  useEffect(() => {
+    const orgId = typeof window !== 'undefined' ? localStorage.getItem('organizationId') : null;
+    if (!orgId) return;
+
+    if (institutions && institutions.length > 0) {
+      const current = institutions.find((i) => i.id === orgId);
+      if (current) {
+        setOrgName(current.name);
+        return;
+      }
+    }
+
+    // Fallback: Fetch directly from API if institutions list hasn't populated yet
+    fetch(`http://localhost:3001/api/v1/organizations/${orgId}`, {
+      headers: { 'x-organization-id': orgId },
+      credentials: 'include',
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.name) {
+          setOrgName(data.data.name);
+        }
+      })
+      .catch(() => {});
+  }, [institutions]);
+
   const isAuthPage =
     pathname === '/login' ||
     pathname === '/register' ||
     pathname === '/signup' ||
     pathname === '/institution' ||
+    pathname === '/profile' ||
     pathname === '/';
-  const isWidgetPage = pathname.startsWith('/chat/'); // Hosted widget page
+  const isWidgetPage = pathname.startsWith('/chat/');
 
   if (isAuthPage || isWidgetPage) return null;
-
-  const handleLogout = async () => {
-    try {
-      await fetch('http://localhost:3001/api/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (err) {
-      console.error('Logout failed', err);
-    } finally {
-      localStorage.removeItem('organizationId');
-      router.push('/login');
-    }
-  };
-
-  const handleDeleteOrg = async () => {
-    const orgId = localStorage.getItem('organizationId');
-    if (!orgId) return;
-
-    const confirmed = window.confirm(
-      'Are you sure you want to permanently delete this institution?\n\nThis action CANNOT be undone and will permanently remove all data, users, and database records from PostgreSQL.'
-    );
-    if (!confirmed) return;
-
-    try {
-      const res = await fetch(`http://localhost:3001/api/v1/organizations/${orgId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-organization-id': orgId,
-        },
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        localStorage.removeItem('organizationId');
-        router.push('/signup?not_registered=true');
-      } else {
-        alert(data.error?.message || 'Failed to delete institution');
-      }
-    } catch (err) {
-      alert('Error deleting institution');
-    }
-  };
 
   const navItems = [
     { name: 'Playground', href: '/playground' },
@@ -70,53 +57,82 @@ export default function Sidebar() {
     { name: 'Widgets', href: '/widgets' },
     { name: 'Audit Logs', href: '/audit-logs' },
     { name: 'Settings', href: '/settings' },
+    { name: 'Institution Details', href: '/institution-details' },
   ];
 
   return (
-    <aside className="w-64 bg-zinc-950 text-zinc-200 border-r border-zinc-800 flex flex-col hidden sm:flex font-mono">
-      <div className="p-6 border-b border-zinc-800 font-bold text-xl tracking-[0.2em] text-zinc-100 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <Image
-            src="/modbit.webp"
-            alt="ModBit Logo"
-            width={24}
-            height={24}
-            className="w-6 h-6 object-contain drop-shadow-[0_0_6px_rgba(255,255,255,0.2)]"
-          />
-          <span>ModBit</span>
+    <aside className="w-64 bg-[#0c0c0f] text-zinc-200 border-r border-zinc-800 flex flex-col hidden sm:flex font-mono select-none">
+      {/* Brand Header */}
+      <div className="p-5 border-b border-zinc-800 space-y-3">
+        <Link href="/" className="flex items-center justify-between group">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src="/modbit.webp"
+              alt="ModBit Logo"
+              width={24}
+              height={24}
+              className="w-6 h-6 object-contain drop-shadow-[0_0_6px_rgba(255,255,255,0.2)] group-hover:scale-110 transition-transform duration-200"
+            />
+            <span className="font-bold text-xl tracking-[0.2em] text-zinc-100 uppercase">
+              ModBit
+            </span>
+          </div>
+          <span className="text-[10px] text-zinc-500 font-normal">// DASH</span>
+        </Link>
+
+        {/* Organization Name Display */}
+        <div className="pt-2.5 border-t border-zinc-800/60 flex items-center justify-between gap-2 px-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span
+              className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider truncate"
+              title={orgName || 'Active Organization'}
+            >
+              {orgName || 'ORGANIZATION'}
+            </span>
+          </div>
+          <span className="text-[9px] text-zinc-500 border border-zinc-800 px-1 py-0.5 rounded bg-zinc-950/60 shrink-0 uppercase tracking-widest font-mono">
+            ORG
+          </span>
         </div>
-        <span className="text-[10px] text-zinc-500 font-mono font-normal">// DASHBOARD</span>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1 text-xs">
-        {navItems.map((item) => (
-          <Link
-            key={item.name}
-            href={item.href}
-            className={`block px-4 py-2.5 rounded-none transition-colors border ${
-              pathname === item.href
-                ? 'border-zinc-200 text-zinc-100 bg-zinc-900 font-bold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
-            }`}
-          >
-            {item.name}
-          </Link>
-        ))}
+      {/* Nav Menu Items */}
+      <nav className="flex-1 p-4 space-y-1.5 text-xs">
+        {navItems.map((item) => {
+          const isActive =
+            pathname === item.href ||
+            (item.href !== '/playground' && pathname.startsWith(item.href));
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`block px-4 py-2.5 text-xs tracking-wider transition-all border ${
+                isActive
+                  ? 'border-zinc-500 text-zinc-100 bg-zinc-900/80 font-bold shadow-sm'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40 hover:border-zinc-800'
+              }`}
+            >
+              {item.name}
+            </Link>
+          );
+        })}
       </nav>
 
+      {/* Footer Bottom Actions */}
       <div className="p-4 border-t border-zinc-800 text-xs space-y-2">
         <button
-          onClick={handleDeleteOrg}
-          className="w-full block px-4 py-2 text-red-400 border border-red-900/60 hover:bg-red-950/40 text-center text-[11px] uppercase tracking-wider transition-colors"
+          onClick={exitInstitution}
+          className="w-full block px-4 py-2 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-600 bg-zinc-950 hover:bg-zinc-900 text-center text-[11px] font-bold uppercase tracking-wider transition-colors"
         >
-          [ DELETE INSTITUTION ]
+          [ EXIT INSTITUTION ]
         </button>
 
         <button
-          onClick={handleLogout}
-          className="w-full block px-4 py-2 text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:bg-zinc-900 text-center text-[11px] uppercase tracking-wider transition-colors"
+          onClick={logout}
+          className="w-full block px-4 py-1.5 text-zinc-500 hover:text-zinc-300 text-center text-[10px] uppercase tracking-wider transition-colors"
         >
-          Sign Out
+          Account Sign Out
         </button>
       </div>
     </aside>

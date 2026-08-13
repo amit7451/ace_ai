@@ -13,6 +13,14 @@ export async function knowledgeController(fastify: FastifyInstance) {
     }
 
     const buffer = await data.toBuffer();
+
+    // Enforce 5 MB limit per document
+    if (buffer.length > 5 * 1024 * 1024) {
+      throw Object.assign(new Error('File size exceeds maximum limit of 5 MB per document.'), {
+        statusCode: 400,
+      });
+    }
+
     const result = await knowledgeService.processUpload(
       request.organization!.id,
       request.user.sub,
@@ -29,6 +37,16 @@ export async function knowledgeController(fastify: FastifyInstance) {
     return { success: true, data: sources };
   });
 
+  fastify.get('/:id/file', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const orgId = request.organization?.id || (request.query as any)?.orgId;
+    const { buffer, mimeType, filename } = await knowledgeService.getDocumentFile(id, orgId);
+
+    reply.header('Content-Type', mimeType);
+    reply.header('Content-Disposition', `inline; filename="${filename}"`);
+    return reply.send(buffer);
+  });
+
   fastify.delete('/:id', async (request: FastifyRequest) => {
     const { id } = request.params as { id: string };
     await knowledgeService.deleteKnowledgeSource(request.organization!.id, id, request.user.sub);
@@ -36,7 +54,6 @@ export async function knowledgeController(fastify: FastifyInstance) {
   });
 
   fastify.post('/search', async (request: FastifyRequest) => {
-    // Placeholder for internal semantic search logic (using ai-core RAG retriever)
     return { success: true, data: { message: 'Search endpoint placeholder registered' } };
   });
 

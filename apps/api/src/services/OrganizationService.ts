@@ -55,11 +55,11 @@ export class OrganizationService {
       joinedAt: new Date(),
     });
 
-    // Default configuration
+    // Default configuration (Testing Tier by default)
     await this.configRepo.upsert(org.id, {
       organizationId: org.id,
-      llmProvider: 'gemini',
-      embeddingProvider: 'gemini',
+      llmProvider: 'testing',
+      embeddingProvider: 'testing',
       temperature: 0.7,
     });
 

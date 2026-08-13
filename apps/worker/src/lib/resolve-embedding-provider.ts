@@ -7,20 +7,33 @@ export interface ResolvedEmbeddingProvider {
   apiKey: string;
 }
 
+const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
+  gemini: 'gemini-embedding-001',
+  testing: 'gemini-embedding-001',
+  openai: 'text-embedding-3-small',
+  cohere: 'embed-english-v3.0',
+  ollama: 'nomic-embed-text',
+};
+
 export async function resolveEmbeddingProvider(
   organizationId: string
 ): Promise<ResolvedEmbeddingProvider> {
   const orgConfig = await prisma.organizationConfiguration.findUnique({
     where: { organizationId },
   });
-  const providerNameRaw = (orgConfig?.embeddingProvider ?? 'openai') as string;
+  const providerNameRaw = (orgConfig?.embeddingProvider ?? 'testing') as string;
   let providerName = providerNameRaw;
-  let model = 'text-embedding-3-small';
+  let model =
+    orgConfig?.embeddingModel ||
+    DEFAULT_EMBEDDING_MODELS[providerNameRaw] ||
+    'text-embedding-3-small';
   let apiKey = '';
 
-  if (providerNameRaw === 'testing' || providerNameRaw === 'gemini') {
+  if (providerNameRaw === 'testing') {
     providerName = 'gemini';
-    model = 'gemini-embedding-001';
+    if (!orgConfig?.embeddingModel) {
+      model = process.env.EMBEDDING_MODEL || 'gemini-embedding-001';
+    }
 
     const apiKeyRecord = await prisma.organizationApiKey.findUnique({
       where: {
@@ -40,10 +53,14 @@ export async function resolveEmbeddingProvider(
 
     if (!apiKey) {
       throw new Error(
-        `API key for embedding provider '${providerNameRaw}' is not configured in organization or system environment.`
+        `Global GEMINI_API_KEY for testing embedding provider is not configured in environment.`
       );
     }
+  } else if (providerNameRaw === 'ollama') {
+    providerName = 'ollama';
+    apiKey = 'ollama-local';
   } else {
+    providerName = providerNameRaw;
     const apiKeyRecord = await prisma.organizationApiKey.findUnique({
       where: {
         organizationId_provider: {
@@ -52,12 +69,17 @@ export async function resolveEmbeddingProvider(
         },
       },
     });
-    if (!apiKeyRecord) {
+
+    if (apiKeyRecord) {
+      const { decryptApiKey } = await import('@ion-ai/config');
+      apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+    } else if (providerNameRaw === 'gemini') {
+      apiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || '';
+    }
+
+    if (!apiKey) {
       throw new Error(`API key for embedding provider '${providerNameRaw}' is not configured.`);
     }
-    const { decryptApiKey } = await import('@ion-ai/config');
-    apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
-    model = providerNameRaw === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
   }
 
   return { providerName, model, apiKey };

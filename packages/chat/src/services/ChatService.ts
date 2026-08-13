@@ -7,9 +7,29 @@ import {
   RagRetriever,
   RagPromptBuilder,
   ChatStreamChunk,
+  LLMError,
 } from '@ai-chatbot-platform/ai-core';
 import { PrismaMemoryProvider } from './PrismaMemoryProvider';
 import { env } from '@ion-ai/config';
+import type { InstitutionSupportInfo, KeySourceType } from '@ion-ai/contracts';
+
+const DEFAULT_LLM_MODELS: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  testing: 'gemini-2.5-flash',
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-3-5-sonnet-20241022',
+  groq: 'llama-3.3-70b-versatile',
+  openrouter: 'meta-llama/llama-3.3-70b-instruct',
+  ollama: 'llama3.2',
+};
+
+const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
+  gemini: 'gemini-embedding-001',
+  testing: 'gemini-embedding-001',
+  openai: 'text-embedding-3-small',
+  cohere: 'embed-english-v3.0',
+  ollama: 'nomic-embed-text',
+};
 
 export class ChatService {
   async createOrchestrator(organizationId: string, context: 'playground' | 'widget') {
@@ -19,15 +39,18 @@ export class ChatService {
       throw new Error('Organization configuration not found');
     }
 
-    const llmProvider = (orgConfig.llmProvider || 'openai') as string;
+    const llmProviderRaw = (orgConfig.llmProvider || 'testing') as string;
     let llmApiKey: string = '';
-    let llmProviderName = llmProvider;
-    let llmModel = 'gpt-4o-mini';
+    let llmProviderName = llmProviderRaw;
+    let llmModel = orgConfig.llmModel || DEFAULT_LLM_MODELS[llmProviderRaw] || 'gpt-4o-mini';
+    let keySource: KeySourceType = 'ORGANIZATION_CUSTOM_KEY';
 
-    if (llmProvider === 'testing' || llmProvider === 'gemini') {
+    if (llmProviderRaw === 'testing') {
       llmProviderName = 'gemini';
-      llmModel = 'gemini-2.5-flash';
-      if (context === 'widget' && llmProvider === 'testing') {
+      if (!orgConfig.llmModel) {
+        llmModel = process.env.LLM_MODEL || 'gemini-2.5-flash';
+      }
+      if (context === 'widget') {
         throw new Error(
           'The "testing" provider is only available in the playground. Please configure your own API key for live widgets.'
         );
@@ -37,24 +60,45 @@ export class ChatService {
       if (apiKeyRecord) {
         const { decryptApiKey } = await import('@ion-ai/config');
         llmApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+        keySource = 'ORGANIZATION_CUSTOM_KEY';
       } else {
         llmApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+        keySource = 'SYSTEM_FREE_TIER';
       }
 
       if (!llmApiKey) {
-        throw new Error(`API key for provider '${llmProvider}' is not configured.`);
+        throw new Error(`Global GEMINI_API_KEY for testing provider is not configured.`);
       }
+    } else if (llmProviderRaw === 'ollama') {
+      llmProviderName = 'ollama';
+      llmApiKey = 'ollama-local';
+      keySource = 'ORGANIZATION_CUSTOM_KEY';
     } else {
-      const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, llmProvider);
-      if (!apiKeyRecord) {
-        throw new Error(`API key for provider '${llmProvider}' is not configured.`);
+      llmProviderName = llmProviderRaw;
+      const apiKeyRecord = await chatRepository.getOrganizationApiKey(
+        organizationId,
+        llmProviderRaw
+      );
+      if (apiKeyRecord) {
+        const { decryptApiKey } = await import('@ion-ai/config');
+        llmApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+        keySource = 'ORGANIZATION_CUSTOM_KEY';
+      } else if (llmProviderRaw === 'gemini') {
+        if (context === 'widget') {
+          throw new Error('API key for Google Gemini is required for live widgets.');
+        }
+        llmApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+        keySource = 'SYSTEM_FREE_TIER';
       }
-      const { decryptApiKey } = await import('@ion-ai/config');
-      llmApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
-      llmModel = llmProvider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini';
+
+      if (!llmApiKey) {
+        throw new Error(`API key for provider '${llmProviderRaw}' is not configured.`);
+      }
     }
 
-    console.log(`[ChatService] Initializing LLM: provider=${llmProviderName}, model=${llmModel}`);
+    console.log(
+      `[ChatService] Initializing LLM: provider=${llmProviderName}, model=${llmModel}, keySource=${keySource}`
+    );
 
     const llm = LLMProviderFactory.create({
       provider: llmProviderName as any,
@@ -64,14 +108,19 @@ export class ChatService {
       maxTokens: orgConfig.maxTokens ?? undefined,
     });
 
-    const embedderProvider = (orgConfig.embeddingProvider || 'openai') as string;
+    const embedderProviderRaw = (orgConfig.embeddingProvider || 'testing') as string;
     let embedderApiKey: string = '';
-    let embedderProviderName = embedderProvider;
-    let embedderModel = 'text-embedding-3-small';
+    let embedderProviderName = embedderProviderRaw;
+    let embedderModel =
+      orgConfig.embeddingModel ||
+      DEFAULT_EMBEDDING_MODELS[embedderProviderRaw] ||
+      'text-embedding-3-small';
 
-    if (embedderProvider === 'testing' || embedderProvider === 'gemini') {
+    if (embedderProviderRaw === 'testing') {
       embedderProviderName = 'gemini';
-      embedderModel = 'gemini-embedding-001';
+      if (!orgConfig.embeddingModel) {
+        embedderModel = process.env.EMBEDDING_MODEL || 'gemini-embedding-001';
+      }
 
       const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, 'gemini');
       if (apiKeyRecord) {
@@ -82,20 +131,29 @@ export class ChatService {
       }
 
       if (!embedderApiKey) {
-        throw new Error(`API key for embedding provider '${embedderProvider}' is not configured.`);
+        throw new Error(`Global GEMINI_API_KEY for testing embedding provider is not configured.`);
       }
+    } else if (embedderProviderRaw === 'ollama') {
+      embedderProviderName = 'ollama';
+      embedderApiKey = 'ollama-local';
     } else {
+      embedderProviderName = embedderProviderRaw;
       const apiKeyRecord = await chatRepository.getOrganizationApiKey(
         organizationId,
-        embedderProvider
+        embedderProviderRaw
       );
-      if (!apiKeyRecord) {
-        throw new Error(`API key for embedding provider '${embedderProvider}' is not configured.`);
+      if (apiKeyRecord) {
+        const { decryptApiKey } = await import('@ion-ai/config');
+        embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      } else if (embedderProviderRaw === 'gemini') {
+        embedderApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
       }
-      const { decryptApiKey } = await import('@ion-ai/config');
-      embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
-      embedderModel =
-        embedderProvider === 'gemini' ? 'gemini-embedding-001' : 'text-embedding-3-small';
+
+      if (!embedderApiKey) {
+        throw new Error(
+          `API key for embedding provider '${embedderProviderRaw}' is not configured.`
+        );
+      }
     }
 
     console.log(
@@ -134,7 +192,23 @@ Your ONLY allowed actions are:
 3. OTHERWISE, you MUST politely decline to answer and state that you do not have the provided context to answer.`,
     });
 
-    return new RagOrchestrator(retriever, memory, promptBuilder, llm);
+    const institutionSupport: InstitutionSupportInfo = {
+      institutionName: orgConfig.institutionName || undefined,
+      supportEmail: orgConfig.supportEmail || undefined,
+      supportWebsite: orgConfig.supportWebsite || undefined,
+      supportPhone: orgConfig.supportPhone || undefined,
+      introductoryMessage: orgConfig.introductoryMessage || undefined,
+    };
+
+    return {
+      orchestrator: new RagOrchestrator(retriever, memory, promptBuilder, llm),
+      keySource,
+      institutionSupport,
+      welcomeMessage:
+        orgConfig.introductoryMessage ||
+        orgConfig.welcomeMessage ||
+        'Hi there! How can I help you today?',
+    };
   }
 
   async streamChat(
@@ -142,9 +216,14 @@ Your ONLY allowed actions are:
     conversationId: string,
     query: string,
     context: 'playground' | 'widget'
-  ): Promise<{ stream: AsyncGenerator<ChatStreamChunk>; welcomeMessage?: string }> {
-    const orchestrator = await this.createOrchestrator(organizationId, context);
-    const orgConfig = await chatRepository.getOrganizationConfig(organizationId);
+  ): Promise<{
+    stream: AsyncGenerator<ChatStreamChunk>;
+    welcomeMessage?: string;
+    keySource: KeySourceType;
+    institutionSupport: InstitutionSupportInfo;
+  }> {
+    const { orchestrator, keySource, institutionSupport, welcomeMessage } =
+      await this.createOrchestrator(organizationId, context);
 
     return {
       stream: orchestrator.stream({
@@ -153,7 +232,9 @@ Your ONLY allowed actions are:
         sessionId: conversationId,
         query,
       }),
-      welcomeMessage: orgConfig?.welcomeMessage || 'Hi there! How can I help you today?',
+      welcomeMessage,
+      keySource,
+      institutionSupport,
     };
   }
 
@@ -175,7 +256,20 @@ Your ONLY allowed actions are:
 
   async getWelcomeMessage(organizationId: string) {
     const config = await chatRepository.getOrganizationConfig(organizationId);
-    return config?.welcomeMessage || 'Hi there! How can I help you today?';
+    return (
+      config?.introductoryMessage || config?.welcomeMessage || 'Hi there! How can I help you today?'
+    );
+  }
+
+  async getInstitutionDetails(organizationId: string): Promise<InstitutionSupportInfo> {
+    const config = await chatRepository.getOrganizationConfig(organizationId);
+    return {
+      institutionName: config?.institutionName || undefined,
+      supportEmail: config?.supportEmail || undefined,
+      supportWebsite: config?.supportWebsite || undefined,
+      supportPhone: config?.supportPhone || undefined,
+      introductoryMessage: config?.introductoryMessage || undefined,
+    };
   }
 }
 

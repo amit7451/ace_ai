@@ -26,6 +26,7 @@ function RegisterForm() {
   const [embeddingProvider, setEmbeddingProvider] = useState('gemini');
   const [temperature, setTemperature] = useState(0.7);
   const [customApiKey, setCustomApiKey] = useState('');
+  const [customEmbeddingApiKey, setCustomEmbeddingApiKey] = useState('');
 
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -106,9 +107,9 @@ function RegisterForm() {
     const activeOrgId = createdOrgId || localStorage.getItem('organizationId') || '';
 
     try {
-      // If Test tier selected, configure to use global Gemini env keys
-      const finalLlmProvider = tier === 'TEST' ? 'gemini' : llmProvider;
-      const finalEmbeddingProvider = tier === 'TEST' ? 'gemini' : embeddingProvider;
+      // If Test tier selected, configure to use global testing tier
+      const finalLlmProvider = tier === 'TEST' ? 'testing' : llmProvider;
+      const finalEmbeddingProvider = tier === 'TEST' ? 'testing' : embeddingProvider;
 
       // 1. Update Institution Configuration
       if (activeOrgId) {
@@ -126,8 +127,8 @@ function RegisterForm() {
           credentials: 'include',
         });
 
-        // 2. Save Custom API Key if Custom tier is selected
-        if (tier === 'CUSTOM' && customApiKey.trim()) {
+        // 2. Save Custom LLM API Key if Custom tier is selected
+        if (tier === 'CUSTOM' && customApiKey.trim() && finalLlmProvider !== 'ollama') {
           await fetch('http://localhost:3001/api/v1/configuration/apikeys', {
             method: 'PUT',
             headers: {
@@ -137,6 +138,27 @@ function RegisterForm() {
             body: JSON.stringify({
               provider: finalLlmProvider,
               apiKey: customApiKey.trim(),
+            }),
+            credentials: 'include',
+          });
+        }
+
+        // 3. Save Custom Embedding API Key if different from LLM provider
+        if (
+          tier === 'CUSTOM' &&
+          customEmbeddingApiKey.trim() &&
+          finalEmbeddingProvider !== finalLlmProvider &&
+          finalEmbeddingProvider !== 'ollama'
+        ) {
+          await fetch('http://localhost:3001/api/v1/configuration/apikeys', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-organization-id': activeOrgId,
+            },
+            body: JSON.stringify({
+              provider: finalEmbeddingProvider,
+              apiKey: customEmbeddingApiKey.trim(),
             }),
             credentials: 'include',
           });
@@ -367,18 +389,19 @@ function RegisterForm() {
             {tier === 'TEST' ? (
               <div className="p-4 border border-zinc-800 bg-zinc-950/80 text-xs font-mono space-y-2">
                 <div className="text-emerald-400 font-bold tracking-wider">
-                  ✓ GLOBAL GEMINI KEY ACTIVE
+                  ✓ GLOBAL TESTING TIER ACTIVE
                 </div>
                 <p className="text-zinc-400 text-[11px]">
-                  All LLM and embedding requests for {organizationName} will use the global Gemini
-                  API key from environment configuration.
+                  All LLM and vector embedding requests for{' '}
+                  {organizationName || 'your organization'} will use the global server environment
+                  configuration. (You can configure custom production keys anytime in Settings).
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
-                    LLM Provider
+                    LLM Provider (Chat)
                   </label>
                   <select
                     value={llmProvider}
@@ -392,6 +415,25 @@ function RegisterForm() {
                     ))}
                   </select>
                 </div>
+
+                {llmProvider === 'ollama' ? (
+                  <div className="p-3 border border-zinc-800 bg-zinc-950 text-[11px] text-zinc-400 font-mono">
+                    ✦ Ollama runs locally at http://localhost:11434 with zero key required.
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                      {llmProvider.toUpperCase()} API Key
+                    </label>
+                    <input
+                      type="password"
+                      placeholder={`Enter your ${llmProvider} API key...`}
+                      value={customApiKey}
+                      onChange={(e) => setCustomApiKey(e.target.value)}
+                      className="w-full px-3.5 py-2.5 modbit-input text-xs"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[11px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
@@ -410,18 +452,20 @@ function RegisterForm() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
-                    Custom API Key ({llmProvider.toUpperCase()})
-                  </label>
-                  <input
-                    type="password"
-                    placeholder={`Enter your ${llmProvider} API key...`}
-                    value={customApiKey}
-                    onChange={(e) => setCustomApiKey(e.target.value)}
-                    className="w-full px-3.5 py-2.5 modbit-input text-xs"
-                  />
-                </div>
+                {embeddingProvider !== 'ollama' && embeddingProvider !== llmProvider && (
+                  <div>
+                    <label className="block text-[11px] font-mono tracking-widest text-zinc-400 uppercase mb-1.5">
+                      {embeddingProvider.toUpperCase()} API Key (For Embeddings)
+                    </label>
+                    <input
+                      type="password"
+                      placeholder={`Enter your ${embeddingProvider} API key for vector embeddings...`}
+                      value={customEmbeddingApiKey}
+                      onChange={(e) => setCustomEmbeddingApiKey(e.target.value)}
+                      className="w-full px-3.5 py-2.5 modbit-input text-xs"
+                    />
+                  </div>
+                )}
               </div>
             )}
 

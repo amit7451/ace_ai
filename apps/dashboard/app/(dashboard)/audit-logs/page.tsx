@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 
+export const dynamic = 'force-dynamic';
+
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,65 +32,70 @@ export default function AuditLogsPage() {
   }, []);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Audit Logs</h1>
+    <div className="p-8 max-w-5xl mx-auto space-y-6 font-mono text-zinc-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-[0.15em] text-zinc-100 uppercase">
+            AUDIT LOGS
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            Immutable security event trail for institution actions
+          </p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow border overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="modbit-card border border-zinc-800 corner-border overflow-x-auto">
+        <table className="min-w-full divide-y divide-zinc-800 text-xs">
+          <thead className="bg-zinc-950/90">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Timestamp
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Action
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                Action Event
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Actor ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Metadata
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
+                Metadata Payload
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-zinc-800/80 bg-zinc-950/40">
             {logs.map((log) => (
-              <tr key={log.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <tr key={log.id} className="hover:bg-zinc-900/30 transition-colors">
+                <td className="px-6 py-4 text-zinc-400">
                   {new Date(log.createdAt).toLocaleString()}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                <td className="px-6 py-4">
+                  <span className="px-2 py-0.5 text-[10px] font-bold border border-zinc-700 bg-zinc-900 text-zinc-300 uppercase tracking-wider">
                     {log.action}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                  {log.actorId || 'System'}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
+                <td className="px-6 py-4 text-zinc-400 font-mono">{log.actorId || 'System'}</td>
+                <td className="px-6 py-4">
                   {log.metadata ? (
-                    <pre className="text-xs bg-gray-50 p-2 rounded overflow-x-auto max-w-xs">
+                    <pre className="text-[10px] bg-zinc-950 p-2 border border-zinc-900 text-zinc-300 overflow-x-auto max-w-xs font-mono">
                       {JSON.stringify(log.metadata, null, 2)}
                     </pre>
                   ) : (
-                    <span className="text-gray-400 italic">None</span>
+                    <span className="text-zinc-600 italic">None</span>
                   )}
                 </td>
               </tr>
             ))}
             {logs.length === 0 && !loading && (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  No audit logs found for this organization.
+                <td colSpan={4} className="px-6 py-8 text-center text-zinc-500">
+                  No audit logs recorded for this organization.
                 </td>
               </tr>
             )}
             {loading && (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                  Loading logs...
+                <td colSpan={4} className="px-6 py-8 text-center text-zinc-500 animate-pulse">
+                  Loading audit logs...
                 </td>
               </tr>
             )}

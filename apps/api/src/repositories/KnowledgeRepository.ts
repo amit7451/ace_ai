@@ -33,6 +33,20 @@ export class KnowledgeRepository {
     });
   }
 
+  async getTotalStorageUsage(organizationId: string): Promise<number> {
+    const aggregate = await prisma.document.aggregate({
+      _sum: {
+        sizeBytes: true,
+      },
+      where: {
+        knowledgeSource: {
+          organizationId,
+        },
+      },
+    });
+    return aggregate._sum.sizeBytes || 0;
+  }
+
   async createKnowledgeSource(data: Prisma.KnowledgeSourceUncheckedCreateInput) {
     return prisma.knowledgeSource.create({ data });
   }

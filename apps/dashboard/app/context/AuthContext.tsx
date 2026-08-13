@@ -21,6 +21,8 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   refreshAuth: () => Promise<void>;
+  updateProfile: (data: { name?: string }) => Promise<boolean>;
+  exitInstitution: () => void;
   logout: () => Promise<void>;
 }
 
@@ -30,6 +32,8 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isAuthenticated: false,
   refreshAuth: async () => {},
+  updateProfile: async () => false,
+  exitInstitution: () => {},
   logout: async () => {},
 });
 
@@ -92,6 +96,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     refreshAuth();
   }, [refreshAuth]);
 
+  const updateProfile = async (data: { name?: string }): Promise<boolean> => {
+    try {
+      const res = await fetch('http://localhost:3001/api/v1/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include',
+      });
+
+      const resData = await res.json();
+      if (resData.success && resData.data) {
+        setUser(resData.data);
+        localStorage.setItem('auth_user', JSON.stringify(resData.data));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+      return false;
+    }
+  };
+
+  // Exit current institution workspace -> takes user back to institution selection page
+  const exitInstitution = () => {
+    localStorage.removeItem('organizationId');
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+    }
+    router.push('/institution');
+  };
+
+  // Global user account logout -> terminates JWT cookie session and returns to login
   const logout = async () => {
     try {
       await fetch('http://localhost:3001/api/v1/auth/logout', {
@@ -99,13 +135,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         credentials: 'include',
       });
     } catch (err) {
-      console.error(err);
+      console.error('Logout failed:', err);
     } finally {
       setUser(null);
       setInstitutions([]);
       localStorage.removeItem('organizationId');
       localStorage.removeItem('auth_user');
       localStorage.removeItem('user_institutions');
+      if (typeof window !== 'undefined') {
+        sessionStorage.clear();
+      }
       router.push('/login');
     }
   };
@@ -118,6 +157,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         isAuthenticated: !!user,
         refreshAuth,
+        updateProfile,
+        exitInstitution,
         logout,
       }}
     >

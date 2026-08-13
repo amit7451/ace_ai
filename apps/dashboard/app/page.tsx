@@ -1,7 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Dotfield from './components/Dotfield';
 import Navbar from './components/Navbar';
 import HowItWorks, { ScrollArrow } from './components/HowItWorks';
@@ -9,24 +7,18 @@ import WhyModBit from './components/WhyModBit';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function Home() {
-  const router = useRouter();
+import { useAuth } from './context/AuthContext';
 
-  // If already logged in (org stored), go straight to dashboard
-  useEffect(() => {
-    const orgId = localStorage.getItem('organizationId');
-    if (orgId) {
-      router.replace('/playground');
-    }
-  }, [router]);
+export default function Home() {
+  const { isAuthenticated, loading } = useAuth();
 
   return (
     <div className="relative bg-[#08080a] text-zinc-200 overflow-x-hidden">
-      {/* Interactive Background Dotfield */}
-      <Dotfield />
+      {/* ── HERO SECTION : Scoped Dotfield ── */}
+      <section className="relative min-h-screen flex flex-col overflow-hidden">
+        {/* Interactive Background Dotfield — Hero Only */}
+        <Dotfield className="absolute inset-0 pointer-events-none z-0 opacity-90" />
 
-      {/* ── PAGE 1 : Hero ── full viewport */}
-      <section className="relative min-h-screen flex flex-col">
         {/* Top Navbar */}
         <Navbar />
 
@@ -59,16 +51,29 @@ export default function Home() {
           </p>
 
           {/* CTA Button Pair */}
-          <div className="flex flex-wrap items-center justify-center gap-3 mt-14">
-            <Link
-              href="/login"
-              className="inline-block px-10 py-4 modbit-btn-primary text-sm tracking-[0.2em] corner-border"
-            >
-              [ GET STARTED ]
-            </Link>
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-14 font-mono">
+            {!loading && (
+              <>
+                {isAuthenticated ? (
+                  <Link
+                    href="/playground"
+                    className="inline-block px-10 py-4 modbit-btn-primary text-sm tracking-[0.2em] corner-border uppercase"
+                  >
+                    [ OPEN DASHBOARD ]
+                  </Link>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="inline-block px-10 py-4 modbit-btn-primary text-sm tracking-[0.2em] corner-border uppercase"
+                  >
+                    [ GET STARTED ]
+                  </Link>
+                )}
+              </>
+            )}
             <a
               href="#how-it-works"
-              className="inline-flex items-center gap-2 px-10 py-4 modbit-btn-secondary text-sm tracking-[0.2em] corner-border"
+              className="inline-flex items-center gap-2 px-10 py-4 modbit-btn-secondary text-sm tracking-[0.2em] corner-border font-mono"
             >
               <svg
                 width="13"
@@ -95,16 +100,19 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── PAGE 2 : How It Works ── full viewport */}
-      <HowItWorks />
+      {/* ── BELOW HERO : Minimal Non-Interactive White Grid Background ── */}
+      <div className="relative z-10 border-t border-zinc-900 bg-[#08080a] bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:4rem_4rem]">
+        {/* ── PAGE 2 : How It Works ── */}
+        <HowItWorks />
 
-      {/* ── PAGE 3 : Why ModBit ── values & features */}
-      <WhyModBit />
+        {/* ── PAGE 3 : Why ModBit ── */}
+        <WhyModBit />
 
-      {/* Minimal Clean Footer */}
-      <footer className="relative z-10 border-t border-zinc-900 bg-[#08080a]/90 py-6 px-6 text-center text-xs text-zinc-500 font-mono tracking-widest">
-        MODBIT &copy; 2026 // ALL RIGHTS RESERVED
-      </footer>
+        {/* Minimal Clean Footer */}
+        <footer className="border-t border-zinc-900 bg-[#08080a]/90 py-6 px-6 text-center text-xs text-zinc-500 font-mono tracking-widest">
+          MODBIT &copy; 2026 // ALL RIGHTS RESERVED
+        </footer>
+      </div>
     </div>
   );
 }

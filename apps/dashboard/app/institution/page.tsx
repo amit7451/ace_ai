@@ -32,6 +32,11 @@ function InstitutionContent() {
   }, [authLoading, isAuthenticated, router]);
 
   const handleSelectInstitution = (id: string) => {
+    const isMember = institutions.some((inst) => inst.id === id);
+    if (!isMember) {
+      setError('Access Denied: You are not authorized to access that institution workspace.');
+      return;
+    }
     localStorage.setItem('organizationId', id);
     router.push('/playground');
   };
@@ -160,14 +165,6 @@ function InstitutionContent() {
                     className="px-5 py-2 text-xs font-mono tracking-widest modbit-btn-primary"
                   >
                     [ OPEN DASHBOARD ]
-                  </button>
-
-                  <button
-                    onClick={() => handleDeleteInstitution(inst.id, inst.name)}
-                    disabled={deletingId === inst.id}
-                    className="px-4 py-2 text-xs font-mono tracking-widest text-red-400 border border-red-900/80 hover:bg-red-950/50 transition-colors disabled:opacity-50"
-                  >
-                    {deletingId === inst.id ? '[ DELETING... ]' : '[ DELETE ORG ]'}
                   </button>
                 </div>
               </div>

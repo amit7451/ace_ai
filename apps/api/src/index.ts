@@ -85,7 +85,15 @@ server.register(
 
 // Global Error Handler
 server.setErrorHandler((error, request, reply) => {
-  request.log.error({ err: error }, 'Request error');
+  const statusCode = (error as any).statusCode || 500;
+  if (statusCode >= 500) {
+    request.log.error({ err: error }, 'Server error');
+  } else {
+    request.log.warn(
+      { statusCode, message: error.message, url: request.url },
+      'Client request error'
+    );
+  }
 
   if (error instanceof ZodError) {
     return reply.status(400).send({
@@ -98,20 +106,28 @@ server.setErrorHandler((error, request, reply) => {
     });
   }
 
-  // Custom application errors can be caught here and mapped to codes
+  if (typeof (error as any).toStructuredAIError === 'function') {
+    const structured = (error as any).toStructuredAIError();
+    return reply.status((error as any).statusCode || 400).send({
+      success: false,
+      error: structured,
+    });
+  }
 
-  return reply.status(error.statusCode || 500).send({
+  return reply.status((error as any).statusCode || 500).send({
     success: false,
     error: {
       code:
-        error.statusCode === 401
+        (error as any).statusCode === 401
           ? 'UNAUTHORIZED'
-          : error.statusCode === 403
+          : (error as any).statusCode === 403
             ? 'FORBIDDEN'
-            : error.statusCode === 404
+            : (error as any).statusCode === 404
               ? 'NOT_FOUND'
-              : 'INTERNAL_SERVER_ERROR',
-      message: error.statusCode ? error.message : 'An unexpected error occurred',
+              : (error as any).statusCode === 429
+                ? 'RATE_LIMIT_EXCEEDED'
+                : 'INTERNAL_SERVER_ERROR',
+      message: (error as any).statusCode ? error.message : 'An unexpected error occurred',
     },
   });
 });

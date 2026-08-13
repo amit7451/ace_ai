@@ -5,8 +5,10 @@ import { mapHttpStatusToEmbeddingError } from '../../errors/error-mapper';
 import { estimateTokens } from '../../utils/token-estimation';
 
 const KNOWN_DIMENSIONS: Record<string, number> = {
-  'text-embedding-004': 768,
   'gemini-embedding-001': 3072,
+  'gemini-embedding-2-preview': 3072,
+  'gemini-embedding-2': 3072,
+  'text-embedding-004': 768,
 };
 
 const TASK_TYPE_MAP: Record<EmbeddingInputType, string> = {
@@ -28,20 +30,22 @@ export class GeminiEmbeddingProvider extends BaseEmbeddingProvider {
   protected readonly vendorMaxBatchSize = 100;
 
   constructor(config: EmbeddingConfig) {
-    super(config, KNOWN_DIMENSIONS[config.model] ?? 768);
+    const cleanModel = config.model.replace(/^models\//, '');
+    super(config, KNOWN_DIMENSIONS[cleanModel] ?? KNOWN_DIMENSIONS[config.model] ?? 3072);
   }
 
   protected async rawEmbed(
     inputs: string[],
     inputType: EmbeddingInputType
   ): Promise<EmbeddingResponse> {
+    const cleanModel = this.model.replace(/^models\//, '');
     const baseUrl = this.config.baseUrl ?? DEFAULT_BASE_URL;
-    const url = `${baseUrl}/models/${this.model}:batchEmbedContents?key=${this.config.apiKey}`;
+    const url = `${baseUrl}/models/${cleanModel}:batchEmbedContents?key=${this.config.apiKey}`;
     const taskType = TASK_TYPE_MAP[inputType] ?? TASK_TYPE_MAP.document;
 
     const body = {
       requests: inputs.map((text) => ({
-        model: `models/${this.model}`,
+        model: `models/${cleanModel}`,
         content: { parts: [{ text }] },
         taskType,
         ...(this.config.dimensions ? { outputDimensionality: this.config.dimensions } : {}),

@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 
-export default function Dotfield() {
+export default function Dotfield({
+  className = 'absolute inset-0 pointer-events-none z-0 opacity-90',
+}: {
+  className?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -12,8 +16,9 @@ export default function Dotfield() {
     if (!ctx) return;
 
     let animationFrameId: number;
-    let width = (canvas.width = window.innerWidth);
-    let height = (canvas.height = window.innerHeight);
+    const parent = canvas.parentElement;
+    let width = (canvas.width = parent ? parent.clientWidth : window.innerWidth);
+    let height = (canvas.height = parent ? parent.clientHeight : window.innerHeight);
 
     let mouseX = -1000;
     let mouseY = -1000;
@@ -21,8 +26,9 @@ export default function Dotfield() {
     let targetMouseY = -1000;
 
     const handleMouseMove = (e: MouseEvent) => {
-      targetMouseX = e.clientX;
-      targetMouseY = e.clientY;
+      const rect = canvas.getBoundingClientRect();
+      targetMouseX = e.clientX - rect.left;
+      targetMouseY = e.clientY - rect.top;
     };
 
     const handleMouseLeave = () => {
@@ -32,8 +38,9 @@ export default function Dotfield() {
 
     const handleResize = () => {
       if (!canvas) return;
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
+      const p = canvas.parentElement;
+      width = canvas.width = p ? p.clientWidth : window.innerWidth;
+      height = canvas.height = p ? p.clientHeight : window.innerHeight;
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -120,5 +127,5 @@ export default function Dotfield() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0 opacity-90" />;
+  return <canvas ref={canvasRef} className={className} />;
 }

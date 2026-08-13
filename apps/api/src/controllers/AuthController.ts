@@ -13,7 +13,7 @@ export async function authController(fastify: FastifyInstance) {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
     });
 
     return { success: true, data: user };
@@ -29,7 +29,7 @@ export async function authController(fastify: FastifyInstance) {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
     });
 
     return { success: true, data: user };
@@ -41,7 +41,30 @@ export async function authController(fastify: FastifyInstance) {
   });
 
   // Authenticated endpoint
-  fastify.get('/me', { preValidation: [fastify.authenticate] }, async (request: FastifyRequest) => {
-    return { success: true, data: request.user };
-  });
+  fastify.get(
+    '/me',
+    { preValidation: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.sub;
+      const user = await authService.getUserById(userId);
+      if (!user) {
+        return reply
+          .status(404)
+          .send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+      }
+      return { success: true, data: { ...user, sub: user.id } };
+    }
+  );
+
+  // Authenticated endpoint: Update profile
+  fastify.put(
+    '/profile',
+    { preValidation: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.sub;
+      const body = (request.body || {}) as { name?: string };
+      const updated = await authService.updateProfile(userId, body);
+      return { success: true, data: { ...updated, sub: updated.id } };
+    }
+  );
 }

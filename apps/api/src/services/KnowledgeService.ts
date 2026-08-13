@@ -23,6 +23,28 @@ export class KnowledgeService {
     mimeType: string,
     originalName: string
   ) {
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    const MAX_ORG_QUOTA = 20 * 1024 * 1024; // 20 MB
+
+    // 1. Strict backend file size validation (5 MB limit)
+    if (fileBuffer.length > MAX_FILE_SIZE) {
+      throw Object.assign(new Error('File size exceeds maximum limit of 5 MB per document.'), {
+        statusCode: 400,
+      });
+    }
+
+    // 2. Strict backend organization storage quota validation (20 MB total limit)
+    const currentTotalUsage = await this.knowledgeRepo.getTotalStorageUsage(organizationId);
+    if (currentTotalUsage + fileBuffer.length > MAX_ORG_QUOTA) {
+      const currentMb = (currentTotalUsage / (1024 * 1024)).toFixed(2);
+      throw Object.assign(
+        new Error(
+          `Organization storage quota exceeded. Current usage: ${currentMb} MB / Max limit: 20.00 MB.`
+        ),
+        { statusCode: 400 }
+      );
+    }
+
     const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
 
     const existingDoc = await this.knowledgeRepo.findDuplicateDocument(hash, organizationId);
@@ -80,6 +102,35 @@ export class KnowledgeService {
 
   async getKnowledgeSources(organizationId: string) {
     return this.knowledgeRepo.findManyByOrganizationId(organizationId);
+  }
+
+  async getDocumentFile(sourceId: string, requestOrgId?: string) {
+    const source = await this.knowledgeRepo.findByIdWithDetails(sourceId);
+
+    if (!source || !source.document) {
+      throw Object.assign(new Error('Document not found'), { statusCode: 404 });
+    }
+
+    if (requestOrgId && source.organizationId !== requestOrgId) {
+      throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+    }
+
+    const buffer = await this.storageProvider.download(source.document.storageKey);
+    const cleanFilename = this.extractCleanFilename(source.document.storageKey);
+
+    return {
+      buffer,
+      mimeType: source.document.mimeType || 'application/pdf',
+      filename: cleanFilename,
+    };
+  }
+
+  extractCleanFilename(storageKey: string): string {
+    if (!storageKey) return 'document';
+    const base = storageKey.includes('/') ? storageKey.split('/')[1] : storageKey;
+    const uuidRegex =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-/;
+    return base.replace(uuidRegex, '');
   }
 
   async deleteKnowledgeSource(organizationId: string, sourceId: string, userId: string) {

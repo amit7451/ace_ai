@@ -57,4 +57,21 @@ export class AuthService {
 
     return { id: user.id, email: user.email, name: user.name };
   }
+
+  async getUserById(id: string) {
+    const user = await this.userRepository.findById(id);
+    if (!user) return null;
+    return { id: user.id, email: user.email, name: user.name };
+  }
+
+  async updateProfile(id: string, data: { name?: string }) {
+    const user = await this.userRepository.findById(id);
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    }
+    const updated = await this.userRepository.update(id, {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+    });
+    return { id: updated.id, email: updated.email, name: updated.name };
+  }
 }

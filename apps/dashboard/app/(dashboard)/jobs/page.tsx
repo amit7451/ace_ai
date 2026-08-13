@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 
+export const dynamic = 'force-dynamic';
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,112 +89,115 @@ export default function JobsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center space-x-4">
-          <h1 className="text-2xl font-bold text-gray-900">Ingestion Jobs</h1>
+    <div className="p-8 max-w-5xl mx-auto space-y-6 font-mono text-zinc-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+        <div className="flex items-center space-x-3">
+          <h1 className="text-xl font-bold tracking-[0.15em] text-zinc-100 uppercase">
+            INGESTION JOBS
+          </h1>
           {isQueuePaused && (
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold rounded-full border border-yellow-200">
+            <span className="px-2.5 py-0.5 border border-yellow-800/80 bg-yellow-950/40 text-yellow-400 text-[10px] font-bold uppercase tracking-wider">
               QUEUE PAUSED
             </span>
           )}
         </div>
-        <div className="space-x-3">
+
+        <div className="flex items-center space-x-3">
           {!isQueuePaused ? (
             <button
               onClick={() => handleAction('/pause')}
-              className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 text-sm font-medium transition-colors"
+              className="px-4 py-2 text-xs font-mono text-yellow-400 border border-yellow-800/80 hover:bg-yellow-950/40 uppercase tracking-wider transition-colors"
             >
-              Pause Queue
+              [ PAUSE QUEUE ]
             </button>
           ) : (
             <button
               onClick={() => handleAction('/resume')}
-              className="px-4 py-2 bg-green-100 text-green-800 rounded-md hover:bg-green-200 text-sm font-medium transition-colors"
+              className="px-4 py-2 text-xs font-mono text-emerald-400 border border-emerald-800/80 hover:bg-emerald-950/40 uppercase tracking-wider transition-colors"
             >
-              Resume Queue
+              [ RESUME QUEUE ]
             </button>
           )}
           <button
             onClick={() => handleAction('/failed', 'DELETE')}
-            className="px-4 py-2 bg-red-100 text-red-800 rounded-md hover:bg-red-200 text-sm font-medium transition-colors"
+            className="px-4 py-2 text-xs font-mono text-red-400 border border-red-900/60 hover:bg-red-950/40 uppercase tracking-wider transition-colors"
           >
-            Clear Failed
+            [ CLEAR FAILED ]
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow border overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="modbit-card border border-zinc-800 corner-border overflow-x-auto">
+        <table className="min-w-full divide-y divide-zinc-800 text-xs">
+          <thead className="bg-zinc-950/90">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Job ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Stage
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Created At
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-6 py-3 text-left font-bold text-zinc-400 uppercase tracking-widest text-[11px]">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-zinc-800/80 bg-zinc-950/40">
             {jobs.map((j) => (
-              <tr key={j.id} className={j.status === 'FAILED' ? 'bg-red-50/50' : ''}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+              <tr key={j.id} className="hover:bg-zinc-900/30 transition-colors">
+                <td className="px-6 py-4 font-bold text-zinc-100 font-mono">
                   {j.id.slice(0, 8)}...
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex items-center space-x-2">
+                <td className="px-6 py-4 text-zinc-400">
+                  <div className="flex items-center space-x-3">
                     <span>{j.currentStage || 'UNKNOWN'}</span>
                     {j.status === 'RUNNING' && j.progress > 0 && (
                       <div className="flex items-center space-x-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2.5 overflow-hidden flex items-center">
+                        <div className="w-20 bg-zinc-900 border border-zinc-800 h-1.5 overflow-hidden">
                           <div
-                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                            className="bg-zinc-100 h-1.5 transition-all duration-300"
                             style={{ width: `${j.progress}%` }}
                           ></div>
                         </div>
-                        <span className="text-xs font-semibold text-blue-600">{j.progress}%</span>
+                        <span className="text-[10px] text-zinc-400 font-bold">{j.progress}%</span>
                       </div>
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4">
                   <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    className={`px-2 py-0.5 text-[10px] font-bold border uppercase tracking-wider ${
                       j.status === 'COMPLETED'
-                        ? 'bg-green-100 text-green-800'
+                        ? 'border-emerald-800/80 bg-emerald-950/40 text-emerald-400'
                         : j.status === 'FAILED'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'border-red-900/60 bg-red-950/40 text-red-400'
+                          : 'border-yellow-800/80 bg-yellow-950/40 text-yellow-400'
                     }`}
                   >
                     {j.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 text-zinc-500">
                   {new Date(j.createdAt).toLocaleTimeString()}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                <td className="px-6 py-4 space-x-3">
                   {j.status === 'FAILED' && (
                     <button
                       onClick={() => handleRetry(j.id)}
-                      className="text-blue-600 hover:text-blue-900 transition-colors"
+                      className="text-zinc-300 hover:text-white underline text-[11px]"
                     >
                       Retry
                     </button>
                   )}
                   <button
                     onClick={() => handleAction(`/${j.id}`, 'DELETE')}
-                    className="text-red-600 hover:text-red-900 transition-colors"
+                    className="text-red-400 hover:text-red-300 underline text-[11px]"
                   >
                     Delete
                   </button>
@@ -201,15 +206,15 @@ export default function JobsPage() {
             ))}
             {jobs.length === 0 && !loading && (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">
                   No jobs queued.
                 </td>
               </tr>
             )}
             {loading && (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500 animate-pulse">
-                  Connecting to live stream...
+                <td colSpan={5} className="px-6 py-8 text-center text-zinc-500 animate-pulse">
+                  Connecting to live SSE job stream...
                 </td>
               </tr>
             )}
