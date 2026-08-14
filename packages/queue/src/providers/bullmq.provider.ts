@@ -27,6 +27,7 @@ export class BullMQProvider implements IQueueProvider {
           host: this.redisConfig.host,
           port: this.redisConfig.port,
           password: this.redisConfig.password,
+          maxRetriesPerRequest: null,
         },
         defaultJobOptions: {
           attempts: 3,
@@ -34,7 +35,14 @@ export class BullMQProvider implements IQueueProvider {
             type: 'exponential',
             delay: 5000, // 5s, 10s, 20s
           },
-          removeOnComplete: true,
+          removeOnComplete: {
+            age: 24 * 3600, // 24 hours
+            count: 1000,
+          },
+          removeOnFail: {
+            age: 7 * 24 * 3600, // 7 days
+            count: 5000,
+          },
         },
       };
       this.queues.set(queueName, new Queue(queueName, queueOptions));

@@ -28,11 +28,13 @@ export class WorkerApplication {
     const connection = {
       host: env.REDIS_HOST ?? 'localhost',
       port: Number(env.REDIS_PORT ?? 6379),
+      password: env.REDIS_PASSWORD,
+      maxRetriesPerRequest: null,
     };
 
     this.ingestionWorker = new Worker(QueueName.INGESTION, this.processIngestionJob.bind(this), {
       connection,
-      concurrency: 5,
+      concurrency: env.WORKER_INGESTION_CONCURRENCY,
     });
 
     this.ingestionWorker.on('completed', (job) => {
@@ -40,6 +42,9 @@ export class WorkerApplication {
     });
     this.ingestionWorker.on('failed', (job, err) => {
       logger.error({ jobId: job?.id, error: err.message }, `Job on ${QueueName.INGESTION} failed`);
+    });
+    this.ingestionWorker.on('error', (err) => {
+      logger.error({ error: err.message }, `Ingestion worker connection error`);
     });
 
     // Lower concurrency than ingestion: each crawl job already fans out
@@ -50,7 +55,7 @@ export class WorkerApplication {
     // crawler engine itself.
     this.crawlerWorker = new Worker(QueueName.CRAWLER, this.processCrawlerJob.bind(this), {
       connection,
-      concurrency: 2,
+      concurrency: env.WORKER_CRAWLER_CONCURRENCY,
     });
 
     this.crawlerWorker.on('completed', (job) => {
@@ -58,6 +63,9 @@ export class WorkerApplication {
     });
     this.crawlerWorker.on('failed', (job, err) => {
       logger.error({ jobId: job?.id, error: err.message }, `Crawl job failed`);
+    });
+    this.crawlerWorker.on('error', (err) => {
+      logger.error({ error: err.message }, `Crawler worker connection error`);
     });
   }
 

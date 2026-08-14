@@ -68,6 +68,8 @@ const envSchema = z.object({
   REDIS_PORT: z.string().default('6379'),
   REDIS_PASSWORD: z.string().optional(),
   QDRANT_URL: z.string().default('http://localhost:6333'),
+  WORKER_INGESTION_CONCURRENCY: z.string().default('5').transform(Number),
+  WORKER_CRAWLER_CONCURRENCY: z.string().default('2').transform(Number),
 
   // AI Providers
   OPENAI_API_KEY: z.string().optional(),
