@@ -73,7 +73,13 @@ export abstract class BaseEmbeddingProvider implements IEmbeddingProvider {
     let totalTokens = 0;
     let indexOffset = 0;
 
-    for (const batch of batches) {
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      if (b > 0) {
+        // Pacing delay between multi-batch requests to prevent RPM bursts
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
       const result = await retryWithBackoff(
         () => this.executeWithTimeout(() => this.rawEmbed(batch, inputType)),
         {

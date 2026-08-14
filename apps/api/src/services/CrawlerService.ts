@@ -72,11 +72,16 @@ export class CrawlerService {
       sameOriginOnly: input.sameOriginOnly ?? true,
     });
 
-    await this.queueProvider.addJob(QueueName.CRAWLER, JobName.CRAWL, {
-      organizationId,
-      crawlJobId: crawlJob.id,
-      url: crawlJob.url,
-    });
+    await this.queueProvider.addJob(
+      QueueName.CRAWLER,
+      JobName.CRAWL,
+      {
+        organizationId,
+        crawlJobId: crawlJob.id,
+        url: crawlJob.url,
+      },
+      { jobId: crawlJob.id }
+    );
 
     await this.auditLogRepo.create({
       organizationId,
@@ -99,11 +104,19 @@ export class CrawlerService {
       throw Object.assign(new Error('Only failed crawlers can be retried'), { statusCode: 400 });
     }
 
-    await this.queueProvider.addJob(QueueName.CRAWLER, JobName.CRAWL, {
-      organizationId,
-      crawlJobId: crawler.id,
-      url: crawler.url,
-    });
+    // Clear any previous failed job instance from BullMQ before re-queuing
+    await this.queueProvider.removeJob(QueueName.CRAWLER, crawler.id);
+
+    await this.queueProvider.addJob(
+      QueueName.CRAWLER,
+      JobName.CRAWL,
+      {
+        organizationId,
+        crawlJobId: crawler.id,
+        url: crawler.url,
+      },
+      { jobId: crawler.id }
+    );
 
     // Pages already marked COMPLETED from the previous attempt are left
     // alone on purpose — the worker's pipeline treats them as "already
@@ -202,6 +215,7 @@ export class CrawlerService {
       }
     }
 
+    await this.queueProvider.removeJob(QueueName.CRAWLER, crawlerId);
     await this.crawlerRepo.deleteById(crawlerId);
 
     await this.auditLogRepo.create({

@@ -1,17 +1,60 @@
 import { z } from 'zod';
 import { config } from 'dotenv';
 import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
 
-config(); // Load local app .env first
-config({ path: path.resolve(process.cwd(), '../../.env') }); // Then load root shared .env
+// Automatically locate and load .env files across monorepo workspace hierarchy
+function loadEnvironment() {
+  const visited = new Set<string>();
+
+  // 1. Current working directory
+  const cwdEnv = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(cwdEnv)) {
+    config({ path: cwdEnv });
+    visited.add(cwdEnv);
+  }
+
+  // 2. Search upward from process.cwd() and __dirname for root .env / .env.local
+  const startPaths = [process.cwd(), __dirname];
+  for (const startPath of startPaths) {
+    let currentDir = startPath;
+    while (currentDir && currentDir !== path.dirname(currentDir)) {
+      const candidatePaths = [path.join(currentDir, '.env'), path.join(currentDir, '.env.local')];
+
+      for (const candidate of candidatePaths) {
+        if (!visited.has(candidate) && fs.existsSync(candidate)) {
+          config({ path: candidate });
+          visited.add(candidate);
+        }
+      }
+
+      if (
+        fs.existsSync(path.join(currentDir, 'pnpm-workspace.yaml')) ||
+        fs.existsSync(path.join(currentDir, 'turbo.json')) ||
+        fs.existsSync(path.join(currentDir, '.git'))
+      ) {
+        break;
+      }
+      currentDir = path.dirname(currentDir);
+    }
+  }
+}
+
+loadEnvironment();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.string().default('3001').transform(Number),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
-  ENCRYPTION_KEY: z.string().min(32).default('0123456789abcdef0123456789abcdef'), // 32-byte key for testing
+  ENCRYPTION_KEY: z
+    .string()
+    .min(32)
+    .regex(
+      /^[0-9a-fA-F]+$/,
+      "ENCRYPTION_KEY must be a hex string (use: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\")"
+    ),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
 
   // Storage (Cloudflare R2)

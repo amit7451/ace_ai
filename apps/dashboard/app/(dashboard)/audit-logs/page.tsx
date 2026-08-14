@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,13 +12,10 @@ export default function AuditLogsPage() {
   const fetchLogs = async () => {
     try {
       const orgId = localStorage.getItem('organizationId') || '';
-      const response = await fetch(
-        `http://localhost:3001/api/v1/organizations/${orgId}/audit-logs`,
-        {
-          headers: { 'x-organization-id': orgId },
-          credentials: 'include',
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}/audit-logs`, {
+        headers: { 'x-organization-id': orgId },
+        credentials: 'include',
+      });
       const json = await response.json();
       if (json.success) setLogs(json.data);
     } catch (err) {

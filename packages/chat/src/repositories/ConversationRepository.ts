@@ -6,6 +6,10 @@ export class ConversationRepository {
     return prisma.conversation.create({ data });
   }
 
+  async findById(id: string) {
+    return prisma.conversation.findUnique({ where: { id } });
+  }
+
   async findByIdWithMessages(id: string) {
     return prisma.conversation.findUnique({
       where: { id },

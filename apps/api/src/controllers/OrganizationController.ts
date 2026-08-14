@@ -27,7 +27,8 @@ export async function organizationController(fastify: FastifyInstance) {
 
     orgRoutes.delete('/:orgId', async (request: FastifyRequest, reply: FastifyReply) => {
       const orgId = (request.params as any).orgId || request.organization?.id;
-      await organizationService.deleteOrganization(request.user.sub, orgId);
+      const { confirmationName } = (request.body as { confirmationName?: string }) || {};
+      await organizationService.deleteOrganization(request.user.sub, orgId, confirmationName);
 
       const remaining = await organizationService
         .getMyOrganizations(request.user.sub)
@@ -38,7 +39,7 @@ export async function organizationController(fastify: FastifyInstance) {
 
       return {
         success: true,
-        message: 'Organization and associated account deleted successfully from database',
+        message: 'Organization deleted successfully.',
       };
     });
   });

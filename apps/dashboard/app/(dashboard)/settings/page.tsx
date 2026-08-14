@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +59,7 @@ export default function SettingsPage() {
     setLoadingLlmModels(true);
     try {
       const res = await fetch(
-        `http://localhost:3001/api/v1/configuration/models?provider=${provider}&type=llm`,
+        `${API_BASE_URL}/api/v1/configuration/models?provider=${provider}&type=llm`,
         {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
@@ -88,7 +89,7 @@ export default function SettingsPage() {
     setLoadingEmbeddingModels(true);
     try {
       const res = await fetch(
-        `http://localhost:3001/api/v1/configuration/models?provider=${provider}&type=embedding`,
+        `${API_BASE_URL}/api/v1/configuration/models?provider=${provider}&type=embedding`,
         {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
@@ -124,11 +125,11 @@ export default function SettingsPage() {
       if (!orgId) return;
 
       const [configRes, keysRes] = await Promise.all([
-        fetch('http://localhost:3001/api/v1/configuration', {
+        fetch(`${API_BASE_URL}/api/v1/configuration`, {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
         }),
-        fetch('http://localhost:3001/api/v1/configuration/apikeys', {
+        fetch(`${API_BASE_URL}/api/v1/configuration/apikeys`, {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
         }),
@@ -182,7 +183,7 @@ export default function SettingsPage() {
 
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch('http://localhost:3001/api/v1/configuration', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/configuration`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -229,7 +230,7 @@ export default function SettingsPage() {
 
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch('http://localhost:3001/api/v1/configuration/apikeys', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/configuration/apikeys`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -263,16 +264,13 @@ export default function SettingsPage() {
     if (!window.confirm(`Are you sure you want to delete the API key for ${provider}?`)) return;
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch(
-        `http://localhost:3001/api/v1/configuration/apikeys?provider=${provider}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'x-organization-id': orgId || '',
-          },
-          credentials: 'include',
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/v1/configuration/apikeys?provider=${provider}`, {
+        method: 'DELETE',
+        headers: {
+          'x-organization-id': orgId || '',
+        },
+        credentials: 'include',
+      });
       const data = await res.json();
       if (data.success) {
         setSuccess('API key deleted successfully.');
@@ -300,7 +298,7 @@ export default function SettingsPage() {
     setError('');
 
     try {
-      const res = await fetch(`http://localhost:3001/api/v1/organizations/${orgId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}`, {
         method: 'DELETE',
         headers: {
           'x-organization-id': orgId,

@@ -77,16 +77,22 @@ export async function crawlerController(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const organizationId = request.organization!.id;
 
-    reply.raw.writeHead(200, {
+    const { env } = await import('@ion-ai/config');
+    const corsHeaders: Record<string, string> = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': request.headers.origin || '*',
-      'Access-Control-Allow-Credentials': 'true',
-    });
-    reply.raw.flushHeaders();
+    };
 
-    const { env } = await import('@ion-ai/config');
+    const origin = request.headers.origin;
+    if (origin && origin === env.FRONTEND_URL) {
+      corsHeaders['Access-Control-Allow-Origin'] = env.FRONTEND_URL;
+      corsHeaders['Access-Control-Allow-Credentials'] = 'true';
+      corsHeaders['Vary'] = 'Origin';
+    }
+
+    reply.raw.writeHead(200, corsHeaders);
+    reply.raw.flushHeaders();
     const { QueueEvents, QueueName } = await import('@ion-ai/queue');
 
     const queueEvents = new QueueEvents(QueueName.CRAWLER, {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export default function JobsPage() {
     let eventSource: EventSource;
 
     try {
-      eventSource = new EventSource(`http://localhost:3001/api/v1/jobs/stream?orgId=${orgId}`, {
+      eventSource = new EventSource(`${API_BASE_URL}/api/v1/jobs/stream?orgId=${orgId}`, {
         withCredentials: true,
       });
 
@@ -51,7 +52,7 @@ export default function JobsPage() {
 
   const handleRetry = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/jobs/${id}/retry`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/jobs/${id}/retry`, {
         method: 'POST',
         headers: { 'x-organization-id': localStorage.getItem('organizationId') || '' },
         credentials: 'include',
@@ -70,7 +71,7 @@ export default function JobsPage() {
 
   const handleAction = async (endpoint: string, method: string = 'POST') => {
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/jobs${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/jobs${endpoint}`, {
         method,
         headers: { 'x-organization-id': localStorage.getItem('organizationId') || '' },
         credentials: 'include',

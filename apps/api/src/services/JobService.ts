@@ -1,4 +1,5 @@
 import { IQueueProvider, QueueName, JobName } from '@ion-ai/queue';
+import { Role, hasPermission } from '@ion-ai/auth';
 import { JobRepository } from '../repositories/JobRepository';
 import { KnowledgeRepository } from '../repositories/KnowledgeRepository';
 
@@ -30,13 +31,21 @@ export class JobService {
       throw Object.assign(new Error('No associated document found'), { statusCode: 400 });
     }
 
-    await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, {
-      organizationId,
-      knowledgeSourceId: job.knowledgeSourceId,
-      documentId: job.knowledgeSource.document.id,
-      storageKey: job.knowledgeSource.document.storageKey,
-      mimeType: job.knowledgeSource.document.mimeType,
-    });
+    // Clear any previous failed job instance from BullMQ before re-queuing
+    await this.queueProvider.removeJob(QueueName.INGESTION, jobId);
+
+    await this.queueProvider.addJob(
+      QueueName.INGESTION,
+      JobName.UPLOAD,
+      {
+        organizationId,
+        knowledgeSourceId: job.knowledgeSourceId,
+        documentId: job.knowledgeSource.document.id,
+        storageKey: job.knowledgeSource.document.storageKey,
+        mimeType: job.knowledgeSource.document.mimeType,
+      },
+      { jobId }
+    );
 
     await this.jobRepo.updateIngestionJob(jobId, {
       status: 'PENDING',
@@ -51,18 +60,34 @@ export class JobService {
     return { success: true };
   }
 
-  async pauseJobs() {
+  async pauseJobs(actorRole: Role) {
+    if (!hasPermission(actorRole, Role.ADMIN)) {
+      throw Object.assign(new Error('Admin access required to pause ingestion'), {
+        statusCode: 403,
+      });
+    }
     await this.queueProvider.pause(QueueName.INGESTION);
     return { success: true };
   }
 
-  async resumeJobs() {
+  async resumeJobs(actorRole: Role) {
+    if (!hasPermission(actorRole, Role.ADMIN)) {
+      throw Object.assign(new Error('Admin access required to resume ingestion'), {
+        statusCode: 403,
+      });
+    }
     await this.queueProvider.resume(QueueName.INGESTION);
     return { success: true };
   }
 
-  async clearFailedJobs(organizationId: string) {
-    await this.queueProvider.cleanFailed(QueueName.INGESTION);
+  async clearFailedJobs(organizationId: string, actorRole: Role) {
+    if (!hasPermission(actorRole, Role.ADMIN)) {
+      throw Object.assign(new Error('Admin access required to clear failed jobs'), {
+        statusCode: 403,
+      });
+    }
+    // Clean failed BullMQ jobs filtered specifically for this tenant
+    await this.queueProvider.cleanFailed(QueueName.INGESTION, organizationId);
     await this.jobRepo.deleteFailedJobsByOrganizationId(organizationId);
     return { success: true };
   }

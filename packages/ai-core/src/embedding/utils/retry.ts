@@ -24,7 +24,7 @@ export async function retryWithBackoff<T>(fn: () => Promise<T>, options: RetryOp
   const {
     maxRetries,
     baseDelayMs = 300,
-    maxDelayMs = 8000,
+    maxDelayMs = 65000,
     isRetryable = () => true,
     onRetry,
   } = options;
@@ -39,7 +39,17 @@ export async function retryWithBackoff<T>(fn: () => Promise<T>, options: RetryOp
       if (isLastAttempt || !isRetryable(err)) {
         throw err;
       }
-      const delayMs = jitteredDelay(attempt, baseDelayMs, maxDelayMs);
+      let delayMs = jitteredDelay(attempt, baseDelayMs, maxDelayMs);
+      if (
+        err &&
+        typeof err === 'object' &&
+        'retryAfterMs' in err &&
+        typeof (err as any).retryAfterMs === 'number' &&
+        (err as any).retryAfterMs > 0
+      ) {
+        // Add a 500ms safety buffer to ensure remote quota has reset
+        delayMs = Math.min((err as any).retryAfterMs + 500, maxDelayMs);
+      }
       onRetry?.(err, attempt + 1, delayMs);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }

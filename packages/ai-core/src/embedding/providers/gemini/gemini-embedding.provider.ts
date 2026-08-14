@@ -3,6 +3,7 @@ import { EmbeddingResponse } from '../../types/embedding-response.types';
 import { BaseEmbeddingProvider } from '../base/base-embedding.provider';
 import { mapHttpStatusToEmbeddingError } from '../../errors/error-mapper';
 import { estimateTokens } from '../../utils/token-estimation';
+import { extractRetryAfter } from '../../utils/retry-after';
 
 const KNOWN_DIMENSIONS: Record<string, number> = {
   'gemini-embedding-001': 3072,
@@ -60,7 +61,8 @@ export class GeminiEmbeddingProvider extends BaseEmbeddingProvider {
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      throw mapHttpStatusToEmbeddingError(this.name, response.status, text);
+      const retryAfterMs = extractRetryAfter(response.headers, text);
+      throw mapHttpStatusToEmbeddingError(this.name, response.status, text, retryAfterMs);
     }
 
     const json = (await response.json()) as GeminiBatchEmbedResponse;

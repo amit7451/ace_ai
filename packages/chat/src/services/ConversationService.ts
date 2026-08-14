@@ -16,6 +16,36 @@ export class ConversationService {
     return await conversationRepository.findByIdWithMessages(id);
   }
 
+  /**
+   * Verifies that a conversation belongs to the specified organization and (optionally) deployment.
+   * Returns the conversation if ownership is confirmed.
+   * Returns null if the conversation doesn't exist or belongs to a different tenant.
+   *
+   * SECURITY: This is the authorization gate for client-supplied conversationIds.
+   * Callers MUST reject with 404 (not 403) on null to avoid confirming ID existence.
+   */
+  async verifyOwnership(
+    conversationId: string,
+    organizationId: string,
+    deploymentId?: string
+  ): Promise<Conversation | null> {
+    const conversation = await conversationRepository.findById(conversationId);
+
+    if (!conversation) {
+      return null;
+    }
+
+    if (conversation.organizationId !== organizationId) {
+      return null;
+    }
+
+    if (deploymentId && conversation.deploymentId !== deploymentId) {
+      return null;
+    }
+
+    return conversation;
+  }
+
   async getConversationWithVisitor(id: string) {
     return await conversationRepository.findByIdWithMessagesAndVisitor(id);
   }

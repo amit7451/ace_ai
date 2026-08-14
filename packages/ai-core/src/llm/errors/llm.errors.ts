@@ -1,3 +1,5 @@
+import { extractRetryAfter } from '../../embedding/utils/retry-after';
+
 export type KeySourceType = 'SYSTEM_FREE_TIER' | 'ORGANIZATION_CUSTOM_KEY' | 'NONE';
 
 export type LLMErrorCode =
@@ -391,6 +393,7 @@ export function mapHttpStatusToError(
 
 export interface HttpErrorLike {
   status: number;
+  headers?: { get(name: string): string | null } | Record<string, any>;
   text(): Promise<string>;
 }
 
@@ -402,5 +405,13 @@ export async function mapHttpErrorResponse(
   retryAfterMs?: number
 ): Promise<LLMError> {
   const body = await response.text();
-  return mapHttpStatusToError(response.status, provider, body, model, keySource, retryAfterMs);
+  const calculatedRetryAfterMs = retryAfterMs ?? extractRetryAfter(response.headers, body);
+  return mapHttpStatusToError(
+    response.status,
+    provider,
+    body,
+    model,
+    keySource,
+    calculatedRetryAfterMs
+  );
 }

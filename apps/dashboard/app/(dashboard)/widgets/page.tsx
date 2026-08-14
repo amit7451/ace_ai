@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +18,15 @@ export default function WidgetsPage() {
     try {
       const orgId = localStorage.getItem('organizationId') || '';
       const [widgetsRes, configRes, keysRes] = await Promise.all([
-        fetch('http://localhost:3001/api/v1/widgets', {
+        fetch(`${API_BASE_URL}/api/v1/widgets`, {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
         }),
-        fetch('http://localhost:3001/api/v1/configuration', {
+        fetch(`${API_BASE_URL}/api/v1/configuration`, {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
         }),
-        fetch('http://localhost:3001/api/v1/configuration/apikeys', {
+        fetch(`${API_BASE_URL}/api/v1/configuration/apikeys`, {
           headers: { 'x-organization-id': orgId },
           credentials: 'include',
         }),
@@ -60,7 +61,7 @@ export default function WidgetsPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/widgets', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/widgets`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

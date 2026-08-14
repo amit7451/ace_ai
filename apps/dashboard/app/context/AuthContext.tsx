@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { API_BASE_URL } from '../lib/api';
 
 export interface User {
   id: string;
@@ -47,7 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const refreshAuth = useCallback(async () => {
     try {
       // 1. Verify user JWT token session
-      const userRes = await fetch('http://localhost:3001/api/v1/auth/me', {
+      const userRes = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
         credentials: 'include',
       });
 
@@ -63,7 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(userData.data);
 
         // 2. Fetch user's attached institutions
-        const orgsRes = await fetch('http://localhost:3001/api/v1/organizations', {
+        const orgsRes = await fetch(`${API_BASE_URL}/api/v1/organizations`, {
           credentials: 'include',
         });
         if (orgsRes.ok) {
@@ -98,7 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const updateProfile = async (data: { name?: string }): Promise<boolean> => {
     try {
-      const res = await fetch('http://localhost:3001/api/v1/auth/profile', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -130,7 +131,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Global user account logout -> terminates JWT cookie session and returns to login
   const logout = async () => {
     try {
-      await fetch('http://localhost:3001/api/v1/auth/logout', {
+      await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });

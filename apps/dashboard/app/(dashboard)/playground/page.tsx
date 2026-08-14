@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useAIError } from '../../context/AIErrorContext';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,7 +157,7 @@ export default function PlaygroundPage() {
     setMetrics(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

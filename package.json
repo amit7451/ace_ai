@@ -7,6 +7,10 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
+    "db:migrate:prod": "pnpm --filter @ion-ai/database prisma migrate deploy",
+    "db:push": "pnpm --filter @ion-ai/database prisma db push",
+    "db:generate": "pnpm --filter @ion-ai/database prisma generate",
+    "db:seed": "pnpm --filter @ion-ai/database db:seed",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "prepare": "husky"

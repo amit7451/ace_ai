@@ -8,6 +8,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   clearMocks: true,
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
+    '^.+\\.(ts|tsx|js|mjs)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
   },
+  transformIgnorePatterns: [],
 };

@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,7 @@ function RegisterForm() {
     setError('');
 
     try {
-      const res = await fetch('http://localhost:3001/api/v1/auth/register', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, organizationName }),
@@ -77,7 +78,7 @@ function RegisterForm() {
       await refreshAuth();
 
       // Fetch newly created organization ID from DB
-      const orgsRes = await fetch('http://localhost:3001/api/v1/organizations', {
+      const orgsRes = await fetch(`${API_BASE_URL}/api/v1/organizations`, {
         credentials: 'include',
       });
       if (orgsRes.ok) {
@@ -113,7 +114,7 @@ function RegisterForm() {
 
       // 1. Update Institution Configuration
       if (activeOrgId) {
-        await fetch('http://localhost:3001/api/v1/configuration', {
+        await fetch(`${API_BASE_URL}/api/v1/configuration`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -129,7 +130,7 @@ function RegisterForm() {
 
         // 2. Save Custom LLM API Key if Custom tier is selected
         if (tier === 'CUSTOM' && customApiKey.trim() && finalLlmProvider !== 'ollama') {
-          await fetch('http://localhost:3001/api/v1/configuration/apikeys', {
+          await fetch(`${API_BASE_URL}/api/v1/configuration/apikeys`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -150,7 +151,7 @@ function RegisterForm() {
           finalEmbeddingProvider !== finalLlmProvider &&
           finalEmbeddingProvider !== 'ollama'
         ) {
-          await fetch('http://localhost:3001/api/v1/configuration/apikeys', {
+          await fetch(`${API_BASE_URL}/api/v1/configuration/apikeys`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',

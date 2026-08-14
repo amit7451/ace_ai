@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export default function KnowledgePage() {
 
   const fetchSources = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/v1/knowledge', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/knowledge`, {
         headers: { 'x-organization-id': getOrgId() },
         credentials: 'include',
       });
@@ -34,7 +35,7 @@ export default function KnowledgePage() {
 
   const fetchCrawlers = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/v1/crawlers', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/crawlers`, {
         headers: { 'x-organization-id': getOrgId() },
         credentials: 'include',
       });
@@ -81,7 +82,7 @@ export default function KnowledgePage() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/knowledge/upload', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/knowledge/upload`, {
         method: 'POST',
         headers: {
           'x-organization-id': getOrgId(),
@@ -107,7 +108,7 @@ export default function KnowledgePage() {
 
   const handleRetry = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/knowledge/${id}/retry`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/knowledge/${id}/retry`, {
         method: 'POST',
         headers: {
           'x-organization-id': getOrgId(),
@@ -131,7 +132,7 @@ export default function KnowledgePage() {
     if (!confirm('Are you sure you want to delete this document?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/knowledge/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/knowledge/${id}`, {
         method: 'DELETE',
         headers: {
           'x-organization-id': getOrgId(),
@@ -159,7 +160,7 @@ export default function KnowledgePage() {
       return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/crawlers/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/crawlers/${id}`, {
         method: 'DELETE',
         headers: {
           'x-organization-id': getOrgId(),
@@ -192,7 +193,7 @@ export default function KnowledgePage() {
     let isFirstPush = true;
 
     try {
-      eventSource = new EventSource(`http://localhost:3001/api/v1/jobs/stream?orgId=${orgId}`, {
+      eventSource = new EventSource(`${API_BASE_URL}/api/v1/jobs/stream?orgId=${orgId}`, {
         withCredentials: true,
       });
 
@@ -265,7 +266,7 @@ export default function KnowledgePage() {
   const storagePercentage = Math.min(100, Math.round((totalUsedBytes / MAX_ORG_QUOTA) * 100));
 
   const getFileUrl = (sourceId: string) => {
-    return `http://localhost:3001/api/v1/knowledge/${sourceId}/file?orgId=${getOrgId()}`;
+    return `${API_BASE_URL}/api/v1/knowledge/${sourceId}/file?orgId=${getOrgId()}`;
   };
 
   return (

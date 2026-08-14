@@ -21,7 +21,38 @@ export class WidgetService {
     }
 
     if (widget.allowedDomains.length > 0 && origin) {
-      const isAllowed = widget.allowedDomains.some((domain) => origin.includes(domain));
+      let hostname: string;
+      try {
+        hostname = new URL(origin).hostname.toLowerCase();
+      } catch {
+        throw new Error('InvalidWidgetDomain');
+      }
+
+      const isAllowed = widget.allowedDomains.some((rawDomain) => {
+        let domain = rawDomain.trim().toLowerCase();
+        if (!domain) return false;
+
+        if (domain.startsWith('http://') || domain.startsWith('https://')) {
+          try {
+            domain = new URL(domain).hostname.toLowerCase();
+          } catch {
+            // fallback if URL parse fails
+          }
+        }
+
+        if (domain.startsWith('*.')) {
+          domain = domain.slice(2);
+        } else if (domain.startsWith('.')) {
+          domain = domain.slice(1);
+        }
+
+        if (domain.includes(':')) {
+          domain = domain.split(':')[0];
+        }
+
+        return hostname === domain || hostname.endsWith('.' + domain);
+      });
+
       if (!isAllowed) {
         throw new Error('InvalidWidgetDomain');
       }

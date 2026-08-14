@@ -8,6 +8,7 @@ import {
   LLMError,
   LLMRateLimitError,
 } from '@ion-ai/chat';
+import { env } from '@ion-ai/config';
 import crypto from 'crypto';
 
 export const ChatController: FastifyPluginAsync = async (fastify) => {
@@ -64,7 +65,18 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
       await rateLimitService.checkOrganizationLimit(organizationId);
 
       // Get or Create Conversation
-      if (!conversationId) {
+      if (conversationId) {
+        // SECURITY: Verify the client-supplied conversationId belongs to this tenant.
+        // Responds 404 (not 403) to avoid confirming whether the ID exists.
+        const existingConv = await conversationService.verifyOwnership(
+          conversationId,
+          organizationId,
+          isWidget ? deploymentId : undefined
+        );
+        if (!existingConv) {
+          return reply.status(404).send({ success: false, error: 'Conversation not found' });
+        }
+      } else {
         const visitor = await chatService.getOrCreateVisitorSession(
           organizationId,
           ipHash,
@@ -84,8 +96,16 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
       reply.raw.setHeader('Content-Type', 'text/event-stream');
       reply.raw.setHeader('Cache-Control', 'no-cache');
       reply.raw.setHeader('Connection', 'keep-alive');
-      reply.raw.setHeader('Access-Control-Allow-Origin', request.headers.origin || '*');
-      reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+      if (isWidget) {
+        reply.raw.setHeader('Access-Control-Allow-Origin', request.headers.origin || '*');
+      } else {
+        const origin = request.headers.origin;
+        if (origin && origin === env.FRONTEND_URL) {
+          reply.raw.setHeader('Access-Control-Allow-Origin', env.FRONTEND_URL);
+          reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+          reply.raw.setHeader('Vary', 'Origin');
+        }
+      }
 
       const chatResult = await chatService.streamChat(
         organizationId,

@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { jobService } from '../di';
+import { Role } from '@ion-ai/auth';
 
 export async function jobController(fastify: FastifyInstance) {
   fastify.addHook('preValidation', fastify.authenticate);
@@ -16,18 +17,18 @@ export async function jobController(fastify: FastifyInstance) {
     return { success: true };
   });
 
-  fastify.post('/pause', async (request: FastifyRequest) => {
-    await jobService.pauseJobs();
+  fastify.post('/pause', async (request: FastifyRequest, reply) => {
+    await jobService.pauseJobs(request.memberRole! as Role);
     return { success: true };
   });
 
-  fastify.post('/resume', async (request: FastifyRequest) => {
-    await jobService.resumeJobs();
+  fastify.post('/resume', async (request: FastifyRequest, reply) => {
+    await jobService.resumeJobs(request.memberRole! as Role);
     return { success: true };
   });
 
   fastify.delete('/failed', async (request: FastifyRequest) => {
-    await jobService.clearFailedJobs(request.organization!.id);
+    await jobService.clearFailedJobs(request.organization!.id, request.memberRole! as Role);
     return { success: true };
   });
 
@@ -38,16 +39,22 @@ export async function jobController(fastify: FastifyInstance) {
   });
 
   fastify.get('/stream', async (request: FastifyRequest, reply) => {
-    reply.raw.writeHead(200, {
+    const { env } = await import('@ion-ai/config');
+    const corsHeaders: Record<string, string> = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': request.headers.origin || '*',
-      'Access-Control-Allow-Credentials': 'true',
-    });
-    reply.raw.flushHeaders();
+    };
 
-    const { env } = await import('@ion-ai/config');
+    const origin = request.headers.origin;
+    if (origin && origin === env.FRONTEND_URL) {
+      corsHeaders['Access-Control-Allow-Origin'] = env.FRONTEND_URL;
+      corsHeaders['Access-Control-Allow-Credentials'] = 'true';
+      corsHeaders['Vary'] = 'Origin';
+    }
+
+    reply.raw.writeHead(200, corsHeaders);
+    reply.raw.flushHeaders();
     const { QueueEvents, QueueName } = await import('@ion-ai/queue');
 
     const queueEvents = new QueueEvents(QueueName.INGESTION, {

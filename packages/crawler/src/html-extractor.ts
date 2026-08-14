@@ -89,7 +89,7 @@ const NOISE_SELECTORS = [
  * renderer available (browser-fetch.ts), re-fetch with that and call this
  * again on the rendered HTML.
  */
-export function extractContent(html: string, pageUrl: string): ExtractedPage {
+export function extractContent(html: string, pageUrl: string = 'http://localhost'): ExtractedPage {
   const platformResult = findPlatformContent(html);
 
   let contentHtml: string | null = null;
@@ -118,7 +118,8 @@ export function extractContent(html: string, pageUrl: string): ExtractedPage {
   NOISE_SELECTORS.forEach((selector) => $(selector).remove());
 
   if (!title) {
-    title = $('title').first().text().trim() || $('h1').first().text().trim();
+    const $orig = cheerio.load(html);
+    title = $orig('title').first().text().trim() || $orig('h1').first().text().trim();
   }
 
   const root = contentHtml ? $.root() : $('body');

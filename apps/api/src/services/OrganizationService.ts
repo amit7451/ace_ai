@@ -2,18 +2,15 @@ import { OrganizationRepository } from '../repositories/OrganizationRepository';
 import { MemberRepository } from '../repositories/MemberRepository';
 import { ConfigurationRepository } from '../repositories/ConfigurationRepository';
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
-import { UserRepository } from '../repositories/UserRepository';
 import { CreateOrganizationRequest } from '@ion-ai/contracts';
 import { Role } from '@ion-ai/auth';
-import { prisma } from '@ion-ai/database';
 
 export class OrganizationService {
   constructor(
     private orgRepo: OrganizationRepository,
     private memberRepo: MemberRepository,
     private configRepo: ConfigurationRepository,
-    private auditRepo: AuditLogRepository,
-    private userRepo?: UserRepository
+    private auditRepo: AuditLogRepository
   ) {}
 
   async createOrganization(userId: string, data: CreateOrganizationRequest) {
@@ -78,31 +75,36 @@ export class OrganizationService {
     return this.orgRepo.findByUserId(userId);
   }
 
-  async deleteOrganization(userId: string, organizationId: string) {
+  async deleteOrganization(userId: string, organizationId: string, confirmationName?: string) {
     const member = await this.memberRepo.findByUserAndOrganization(userId, organizationId);
-    if (!member || (member.role !== Role.OWNER && member.role !== Role.ADMIN)) {
+    if (!member || member.role !== Role.OWNER) {
       throw Object.assign(
-        new Error('Only an institution owner or admin can delete this institution account.'),
-        {
-          statusCode: 403,
-        }
+        new Error('Only the institution owner can delete this institution account.'),
+        { statusCode: 403 }
       );
     }
 
-    // Find all member user IDs before cascade deletion
-    const members = await this.memberRepo.findByOrganization(organizationId);
-    const affectedUserIds = Array.from(new Set(members.map((m) => m.userId)));
-
-    // Cascade delete the organization
-    const deletedOrg = await this.orgRepo.delete(organizationId);
-
-    // Purge user records if they have 0 remaining organizations
-    for (const uId of affectedUserIds) {
-      const remainingOrgs = await this.orgRepo.findByUserId(uId);
-      if (remainingOrgs.length === 0) {
-        await prisma.user.delete({ where: { id: uId } }).catch(() => {});
-      }
+    // Require the caller to confirm by typing the org name (defense against accidental deletion)
+    const org = await this.orgRepo.findById(organizationId);
+    if (!org) {
+      throw Object.assign(new Error('Organization not found'), { statusCode: 404 });
     }
+
+    if (!confirmationName || confirmationName !== org.name) {
+      throw Object.assign(
+        new Error('Confirmation required: provide the organization name to confirm deletion.'),
+        { statusCode: 400 }
+      );
+    }
+
+    // Cascade delete the organization.
+    // Prisma's onDelete: Cascade handles members, configuration, API keys,
+    // audit logs, knowledge sources, conversations, etc.
+    //
+    // SECURITY: We deliberately do NOT auto-delete user accounts of former members.
+    // A user's account belongs to that user, not to the organization.
+    // Users who lose their last org will see an empty state and can create a new one.
+    const deletedOrg = await this.orgRepo.delete(organizationId);
 
     return deletedOrg;
   }

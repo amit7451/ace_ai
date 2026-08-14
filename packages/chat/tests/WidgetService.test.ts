@@ -64,7 +64,40 @@ describe('WidgetService', () => {
       ).rejects.toThrow('InvalidWidgetDomain');
     });
 
-    it('should return widget if validation passes', async () => {
+    it('should reject substring domain prefix attacks (evil-example.com)', async () => {
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue({
+        enabled: true,
+        allowedDomains: ['example.com'],
+      });
+
+      await expect(
+        widgetService.validateWidgetKey('valid_key', 'https://evil-example.com')
+      ).rejects.toThrow('InvalidWidgetDomain');
+    });
+
+    it('should reject domain suffix attacker attacks (example.com.attacker.io)', async () => {
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue({
+        enabled: true,
+        allowedDomains: ['example.com'],
+      });
+
+      await expect(
+        widgetService.validateWidgetKey('valid_key', 'https://example.com.attacker.io')
+      ).rejects.toThrow('InvalidWidgetDomain');
+    });
+
+    it('should reject malformed origin URLs', async () => {
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue({
+        enabled: true,
+        allowedDomains: ['example.com'],
+      });
+
+      await expect(widgetService.validateWidgetKey('valid_key', 'not-a-valid-url')).rejects.toThrow(
+        'InvalidWidgetDomain'
+      );
+    });
+
+    it('should allow exact domain match', async () => {
       const mockWidget = {
         enabled: true,
         allowedDomains: ['example.com'],
@@ -72,6 +105,50 @@ describe('WidgetService', () => {
       (prisma.widget.findUnique as jest.Mock).mockResolvedValue(mockWidget);
 
       const result = await widgetService.validateWidgetKey('valid_key', 'https://example.com');
+      expect(result).toEqual(mockWidget);
+    });
+
+    it('should allow legitimate subdomains', async () => {
+      const mockWidget = {
+        enabled: true,
+        allowedDomains: ['example.com'],
+      };
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue(mockWidget);
+
+      const result = await widgetService.validateWidgetKey('valid_key', 'https://app.example.com');
+      expect(result).toEqual(mockWidget);
+    });
+
+    it('should allow matching domain with port', async () => {
+      const mockWidget = {
+        enabled: true,
+        allowedDomains: ['localhost:3000'],
+      };
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue(mockWidget);
+
+      const result = await widgetService.validateWidgetKey('valid_key', 'http://localhost:3000');
+      expect(result).toEqual(mockWidget);
+    });
+
+    it('should allow wildcard configured domain', async () => {
+      const mockWidget = {
+        enabled: true,
+        allowedDomains: ['*.example.com'],
+      };
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue(mockWidget);
+
+      const result = await widgetService.validateWidgetKey('valid_key', 'https://sub.example.com');
+      expect(result).toEqual(mockWidget);
+    });
+
+    it('should allow any origin if allowedDomains is empty', async () => {
+      const mockWidget = {
+        enabled: true,
+        allowedDomains: [],
+      };
+      (prisma.widget.findUnique as jest.Mock).mockResolvedValue(mockWidget);
+
+      const result = await widgetService.validateWidgetKey('valid_key', 'https://any-site.com');
       expect(result).toEqual(mockWidget);
     });
   });

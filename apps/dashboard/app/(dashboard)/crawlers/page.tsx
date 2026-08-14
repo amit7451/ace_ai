@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback, FormEvent } from 'react';
 import Link from 'next/link';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = API_BASE_URL;
 
 interface CrawlJob {
   id: string;

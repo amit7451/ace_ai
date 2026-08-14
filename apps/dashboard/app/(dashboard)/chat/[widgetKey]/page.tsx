@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
+import { API_BASE_URL } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export default function HostedChatPage({ params }: { params: { widgetKey: string
     const fetchConfig = async () => {
       try {
         const response = await fetch(
-          `http://localhost:3001/api/v1/chat/config?widgetKey=${params.widgetKey}`
+          `${API_BASE_URL}/api/v1/chat/config?widgetKey=${params.widgetKey}`
         );
         const json = await response.json();
         if (json.success && json.data?.institutionName) {
@@ -50,7 +51,7 @@ export default function HostedChatPage({ params }: { params: { widgetKey: string
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

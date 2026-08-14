@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../lib/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -24,7 +25,7 @@ export default function LoginPage() {
 
     try {
       // 1. Authenticate with API
-      const res = await fetch('http://localhost:3001/api/v1/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -41,7 +42,7 @@ export default function LoginPage() {
       await refreshAuth();
 
       // 2. Fetch attached institutions for this account
-      const orgsRes = await fetch('http://localhost:3001/api/v1/organizations', {
+      const orgsRes = await fetch(`${API_BASE_URL}/api/v1/organizations`, {
         credentials: 'include',
       });
 

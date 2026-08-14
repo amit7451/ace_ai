@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export default function InstitutionDetailsPage() {
       const orgId = localStorage.getItem('organizationId');
       if (!orgId) return;
 
-      const res = await fetch('http://localhost:3001/api/v1/configuration', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/configuration`, {
         headers: { 'x-organization-id': orgId },
         credentials: 'include',
       });
@@ -60,7 +61,7 @@ export default function InstitutionDetailsPage() {
 
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch('http://localhost:3001/api/v1/configuration', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/configuration`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

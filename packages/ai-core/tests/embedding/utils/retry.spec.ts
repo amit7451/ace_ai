@@ -38,4 +38,13 @@ describe('retryWithBackoff', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onRetry.mock.calls[0][1]).toBe(1);
   });
+
+  it('respects retryAfterMs when error provides one', async () => {
+    const onRetry = jest.fn();
+    const rateLimitErr = Object.assign(new Error('Rate limited'), { retryAfterMs: 50 });
+    const fn = jest.fn().mockRejectedValueOnce(rateLimitErr).mockResolvedValueOnce('ok');
+    await retryWithBackoff(fn, { maxRetries: 2, baseDelayMs: 1, onRetry });
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onRetry.mock.calls[0][2]).toBeGreaterThanOrEqual(50);
+  });
 });

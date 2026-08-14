@@ -34,7 +34,7 @@ export async function retryWithBackoff<T>(fn: () => Promise<T>, options: RetryOp
   const {
     maxRetries,
     baseDelayMs = 500,
-    maxDelayMs = 15_000,
+    maxDelayMs = 65_000,
     isRetryable = defaultIsRetryable,
     onRetry,
   } = options;
@@ -53,7 +53,16 @@ export async function retryWithBackoff<T>(fn: () => Promise<T>, options: RetryOp
       }
 
       const jitter = 0.85 + Math.random() * 0.3;
-      const delayMs = Math.min(baseDelayMs * 2 ** attempt * jitter, maxDelayMs);
+      let delayMs = Math.min(baseDelayMs * 2 ** attempt * jitter, maxDelayMs);
+      if (
+        error &&
+        typeof error === 'object' &&
+        'retryAfterMs' in error &&
+        typeof (error as any).retryAfterMs === 'number' &&
+        (error as any).retryAfterMs > 0
+      ) {
+        delayMs = Math.min((error as any).retryAfterMs + 500, maxDelayMs);
+      }
       onRetry?.(attempt + 1, error, delayMs);
       await sleep(delayMs);
     }

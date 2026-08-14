@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,7 @@ function InstitutionContent() {
     setSuccessMsg('');
 
     try {
-      const res = await fetch(`http://localhost:3001/api/v1/organizations/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${id}`, {
         method: 'DELETE',
         headers: {
           'x-organization-id': id,

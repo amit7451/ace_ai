@@ -1,5 +1,5 @@
 import { Queue, QueueOptions } from 'bullmq';
-import { IQueueProvider } from '../interfaces/queue.interface';
+import { IQueueProvider, QueueJobOptions } from '../interfaces/queue.interface';
 
 export interface RedisConfig {
   host: string;
@@ -42,9 +42,19 @@ export class BullMQProvider implements IQueueProvider {
     return this.queues.get(queueName)!;
   }
 
-  async addJob<T>(queueName: string, jobName: string, data: T): Promise<string> {
+  async addJob<T>(
+    queueName: string,
+    jobName: string,
+    data: T,
+    opts?: QueueJobOptions
+  ): Promise<string> {
     const queue = this.getQueue(queueName);
-    const job = await queue.add(jobName, data);
+    const job = await queue.add(jobName, data, {
+      ...(opts?.jobId ? { jobId: opts.jobId } : {}),
+      ...(opts?.delay !== undefined ? { delay: opts.delay } : {}),
+      ...(opts?.attempts !== undefined ? { attempts: opts.attempts } : {}),
+      ...(opts?.priority !== undefined ? { priority: opts.priority } : {}),
+    });
     return job.id!;
   }
 
@@ -58,10 +68,19 @@ export class BullMQProvider implements IQueueProvider {
     await queue.resume();
   }
 
-  async cleanFailed(queueName: string): Promise<void> {
+  async cleanFailed(queueName: string, organizationId?: string): Promise<void> {
     const queue = this.getQueue(queueName);
-    // clean 1000 failed jobs, wait 10s grace period
-    await queue.clean(0, 1000, 'failed');
+    if (organizationId) {
+      const failedJobs = await queue.getJobs(['failed']);
+      for (const job of failedJobs) {
+        if (job?.data && (job.data as any).organizationId === organizationId) {
+          await job.remove();
+        }
+      }
+    } else {
+      // clean 1000 failed jobs, wait 10s grace period
+      await queue.clean(0, 1000, 'failed');
+    }
   }
 
   async removeJob(queueName: string, jobId: string): Promise<void> {

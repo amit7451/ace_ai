@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../lib/api';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -24,7 +25,7 @@ export default function Sidebar() {
     }
 
     // Fallback: Fetch directly from API if institutions list hasn't populated yet
-    fetch(`http://localhost:3001/api/v1/organizations/${orgId}`, {
+    fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}`, {
       headers: { 'x-organization-id': orgId },
       credentials: 'include',
     })

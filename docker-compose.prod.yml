@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ion-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ion_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ion_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ion_ai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ion_user} -d ${POSTGRES_DB:-ion_ai}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ion-internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: ion-ai-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ion-internal
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ion-ai-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:6333/healthz || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ion-internal
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ion-ai-api
+    restart: unless-stopped
+    ports:
+      - '${PORT:-3001}:3001'
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ion_user}:${POSTGRES_PASSWORD:-ion_password}@postgres:5432/${POSTGRES_DB:-ion_ai}?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - ion-internal
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: ion-ai-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ion_user}:${POSTGRES_PASSWORD:-ion_password}@postgres:5432/${POSTGRES_DB:-ion_ai}?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - ion-internal
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    container_name: ion-ai-dashboard
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      - api
+    networks:
+      - ion-internal
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+
+networks:
+  ion-internal:
+    driver: bridge

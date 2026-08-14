@@ -85,7 +85,9 @@ export class KnowledgeService {
       mimeType,
     };
 
-    await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, payload);
+    await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, payload, {
+      jobId: ingestionJob.id,
+    });
 
     await this.auditLogRepo.create({
       organizationId,
@@ -181,13 +183,21 @@ export class KnowledgeService {
       throw Object.assign(new Error('No associated document found'), { statusCode: 400 });
     }
 
-    await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, {
-      organizationId,
-      knowledgeSourceId: source.id,
-      documentId: source.document.id,
-      storageKey: source.document.storageKey,
-      mimeType: source.document.mimeType,
-    });
+    // Clear any previous failed job instance from BullMQ before re-queuing
+    await this.queueProvider.removeJob(QueueName.INGESTION, latestJob.id);
+
+    await this.queueProvider.addJob(
+      QueueName.INGESTION,
+      JobName.UPLOAD,
+      {
+        organizationId,
+        knowledgeSourceId: source.id,
+        documentId: source.document.id,
+        storageKey: source.document.storageKey,
+        mimeType: source.document.mimeType,
+      },
+      { jobId: latestJob.id }
+    );
 
     await this.jobRepo.updateIngestionJob(latestJob.id, {
       status: 'PENDING',

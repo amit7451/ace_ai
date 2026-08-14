@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,7 @@ export default function MembersPage() {
 
   const fetchMe = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/v1/auth/me', { credentials: 'include' });
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`, { credentials: 'include' });
       const data = await res.json();
       if (data.success && data.data) {
         setCurrentUserId(data.data.sub);
@@ -51,7 +52,7 @@ export default function MembersPage() {
   const fetchMembers = async () => {
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch(`http://localhost:3001/api/v1/organizations/${orgId}/members`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}/members`, {
         headers: {
           'x-organization-id': orgId || '',
         },
@@ -78,18 +79,15 @@ export default function MembersPage() {
 
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch(
-        `http://localhost:3001/api/v1/organizations/${orgId}/members/invitations`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-organization-id': orgId || '',
-          },
-          body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-          credentials: 'include',
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}/members/invitations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-organization-id': orgId || '',
+        },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        credentials: 'include',
+      });
       const data = await res.json();
 
       if (data.success) {
@@ -111,16 +109,13 @@ export default function MembersPage() {
 
     try {
       const orgId = localStorage.getItem('organizationId');
-      const res = await fetch(
-        `http://localhost:3001/api/v1/organizations/${orgId}/members/${userId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'x-organization-id': orgId || '',
-          },
-          credentials: 'include',
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}/members/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-organization-id': orgId || '',
+        },
+        credentials: 'include',
+      });
       const data = await res.json();
 
       if (data.success) {
