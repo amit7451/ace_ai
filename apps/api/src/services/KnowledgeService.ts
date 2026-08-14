@@ -1,5 +1,6 @@
 import { IStorageProvider } from '@ion-ai/storage';
 import { IQueueProvider, QueueName, JobName, UploadJobPayload } from '@ion-ai/queue';
+import { prisma } from '@ion-ai/database';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -33,7 +34,7 @@ export class KnowledgeService {
       });
     }
 
-    // 2. Strict backend organization storage quota validation (20 MB total limit)
+    // 2. Strict backend organization storage quota pre-validation
     const currentTotalUsage = await this.knowledgeRepo.getTotalStorageUsage(organizationId);
     if (currentTotalUsage + fileBuffer.length > MAX_ORG_QUOTA) {
       const currentMb = (currentTotalUsage / (1024 * 1024)).toFixed(2);
@@ -55,55 +56,116 @@ export class KnowledgeService {
     const storageKey = `${organizationId}/${uuidv4()}-${originalName}`;
     await this.storageProvider.upload(storageKey, fileBuffer, mimeType);
 
-    const knowledgeSource = await this.knowledgeRepo.createKnowledgeSource({
-      organizationId,
-      sourceType: this.mapMimeToSourceType(mimeType),
-      createdBy: userId,
-      status: 'PENDING',
-    });
+    try {
+      // 3. Atomically re-validate quota and create records in a database transaction
+      const { knowledgeSource, document, ingestionJob } = await prisma.$transaction(async (tx) => {
+        const aggregate = await tx.document.aggregate({
+          _sum: { sizeBytes: true },
+          where: { knowledgeSource: { organizationId } },
+        });
+        const liveUsage = aggregate._sum.sizeBytes || 0;
 
-    const document = await this.knowledgeRepo.createDocument({
-      knowledgeSourceId: knowledgeSource.id,
-      storageKey,
-      mimeType,
-      sizeBytes: fileBuffer.length,
-      hashSha256: hash,
-    });
+        if (liveUsage + fileBuffer.length > MAX_ORG_QUOTA) {
+          const currentMb = (liveUsage / (1024 * 1024)).toFixed(2);
+          throw Object.assign(
+            new Error(
+              `Organization storage quota exceeded. Current usage: ${currentMb} MB / Max limit: 20.00 MB.`
+            ),
+            { statusCode: 400 }
+          );
+        }
 
-    const ingestionJob = await this.jobRepo.createIngestionJob({
-      knowledgeSourceId: knowledgeSource.id,
-      currentStage: 'UPLOADED',
-      progress: 0,
-      status: 'PENDING',
-    });
+        const ks = await tx.knowledgeSource.create({
+          data: {
+            organizationId,
+            sourceType: this.mapMimeToSourceType(mimeType),
+            createdBy: userId,
+            status: 'PENDING',
+          },
+        });
 
-    const payload: UploadJobPayload = {
-      organizationId,
-      knowledgeSourceId: knowledgeSource.id,
-      documentId: document.id,
-      storageKey,
-      mimeType,
-    };
+        const doc = await tx.document.create({
+          data: {
+            knowledgeSourceId: ks.id,
+            storageKey,
+            mimeType,
+            sizeBytes: fileBuffer.length,
+            hashSha256: hash,
+          },
+        });
 
-    await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, payload, {
-      jobId: ingestionJob.id,
-    });
+        const job = await tx.ingestionJob.create({
+          data: {
+            knowledgeSourceId: ks.id,
+            currentStage: 'UPLOADED',
+            progress: 0,
+            status: 'PENDING',
+          },
+        });
 
-    await this.auditLogRepo.create({
-      organizationId,
-      action: 'KNOWLEDGE_UPLOADED',
-      actorId: userId,
-      metadata: { originalName, mimeType, documentId: document.id },
-    });
+        return { knowledgeSource: ks, document: doc, ingestionJob: job };
+      });
 
-    return {
-      knowledgeSourceId: knowledgeSource.id,
-      jobId: ingestionJob.id,
-    };
+      const payload: UploadJobPayload = {
+        organizationId,
+        knowledgeSourceId: knowledgeSource.id,
+        documentId: document.id,
+        storageKey,
+        mimeType,
+      };
+
+      await this.queueProvider.addJob(QueueName.INGESTION, JobName.UPLOAD, payload, {
+        jobId: ingestionJob.id,
+      });
+
+      await this.auditLogRepo.create({
+        organizationId,
+        action: 'KNOWLEDGE_UPLOADED',
+        actorId: userId,
+        metadata: { originalName, mimeType, documentId: document.id },
+      });
+
+      return {
+        knowledgeSourceId: knowledgeSource.id,
+        jobId: ingestionJob.id,
+      };
+    } catch (err) {
+      // Rollback uploaded file in storage if transaction or queue insertion fails
+      await this.storageProvider.delete(storageKey).catch(() => {});
+      throw err;
+    }
   }
 
   async getKnowledgeSources(organizationId: string) {
     return this.knowledgeRepo.findManyByOrganizationId(organizationId);
+  }
+
+  async getSignedDocumentUrl(
+    sourceId: string,
+    requestOrgId?: string,
+    expiresIn: number = 3600
+  ): Promise<{ signedUrl: string; filename: string; mimeType: string }> {
+    const source = await this.knowledgeRepo.findByIdWithDetails(sourceId);
+
+    if (!source || !source.document) {
+      throw Object.assign(new Error('Document not found'), { statusCode: 404 });
+    }
+
+    if (requestOrgId && source.organizationId !== requestOrgId) {
+      throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+    }
+
+    const signedUrl = await this.storageProvider.getSignedUrl(
+      source.document.storageKey,
+      expiresIn
+    );
+    const cleanFilename = this.extractCleanFilename(source.document.storageKey);
+
+    return {
+      signedUrl,
+      filename: cleanFilename,
+      mimeType: source.document.mimeType || 'application/pdf',
+    };
   }
 
   async getDocumentFile(sourceId: string, requestOrgId?: string) {
@@ -142,14 +204,12 @@ export class KnowledgeService {
       throw Object.assign(new Error('NotFound'), { statusCode: 404 });
     }
 
-    if (source.document) {
-      await this.queueProvider.addJob(QueueName.INGESTION, JobName.DELETE, {
-        organizationId,
-        knowledgeSourceId: source.id,
-        documentId: source.document.id,
-        storageKey: source.document.storageKey,
-      });
-    }
+    await this.queueProvider.addJob(QueueName.INGESTION, JobName.DELETE, {
+      organizationId,
+      knowledgeSourceId: source.id,
+      documentId: source.document?.id ?? '',
+      storageKey: source.document?.storageKey ?? '',
+    });
 
     await this.knowledgeRepo.updateKnowledgeSourceStatus(sourceId, 'PENDING');
 
@@ -179,33 +239,51 @@ export class KnowledgeService {
       throw Object.assign(new Error('No failed ingestion job found'), { statusCode: 400 });
     }
 
-    if (!source.document) {
-      throw Object.assign(new Error('No associated document found'), { statusCode: 400 });
-    }
-
     // Clear any previous failed job instance from BullMQ before re-queuing
     await this.queueProvider.removeJob(QueueName.INGESTION, latestJob.id);
 
-    await this.queueProvider.addJob(
-      QueueName.INGESTION,
-      JobName.UPLOAD,
-      {
-        organizationId,
-        knowledgeSourceId: source.id,
-        documentId: source.document.id,
-        storageKey: source.document.storageKey,
-        mimeType: source.document.mimeType,
-      },
-      { jobId: latestJob.id }
-    );
+    if (!source.document || latestJob.currentStage === 'DELETING') {
+      await this.queueProvider.addJob(
+        QueueName.INGESTION,
+        JobName.DELETE,
+        {
+          organizationId,
+          knowledgeSourceId: source.id,
+          documentId: source.document?.id ?? '',
+          storageKey: source.document?.storageKey ?? '',
+        },
+        { jobId: latestJob.id }
+      );
 
-    await this.jobRepo.updateIngestionJob(latestJob.id, {
-      status: 'PENDING',
-      currentStage: 'UPLOADED',
-      progress: 0,
-      retryCount: { increment: 1 },
-      failureReason: null,
-    });
+      await this.jobRepo.updateIngestionJob(latestJob.id, {
+        status: 'PENDING',
+        currentStage: 'DELETING',
+        progress: 0,
+        retryCount: { increment: 1 },
+        failureReason: null,
+      });
+    } else {
+      await this.queueProvider.addJob(
+        QueueName.INGESTION,
+        JobName.UPLOAD,
+        {
+          organizationId,
+          knowledgeSourceId: source.id,
+          documentId: source.document.id,
+          storageKey: source.document.storageKey,
+          mimeType: source.document.mimeType,
+        },
+        { jobId: latestJob.id }
+      );
+
+      await this.jobRepo.updateIngestionJob(latestJob.id, {
+        status: 'PENDING',
+        currentStage: 'UPLOADED',
+        progress: 0,
+        retryCount: { increment: 1 },
+        failureReason: null,
+      });
+    }
 
     await this.knowledgeRepo.updateKnowledgeSourceStatus(sourceId, 'PENDING');
 

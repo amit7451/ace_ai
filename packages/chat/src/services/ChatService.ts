@@ -247,11 +247,7 @@ Your ONLY allowed actions are:
   }
 
   async getOrCreateVisitorSession(organizationId: string, ipHash: string, userAgent: string) {
-    let visitor = await chatRepository.getVisitorSession(organizationId, ipHash);
-    if (!visitor) {
-      visitor = await chatRepository.createVisitorSession({ organizationId, ipHash, userAgent });
-    }
-    return visitor;
+    return chatRepository.upsertVisitorSession(organizationId, ipHash, userAgent);
   }
 
   async getWelcomeMessage(organizationId: string) {

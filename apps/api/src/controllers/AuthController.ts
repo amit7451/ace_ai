@@ -2,34 +2,53 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authService } from '../di';
 import { LoginRequestSchema, RegisterRequestSchema } from '@ion-ai/contracts';
 
+const AUTH_RATE_LIMIT = {
+  config: {
+    rateLimit: {
+      max: 10,
+      timeWindow: '1 minute',
+    },
+  },
+};
+
+const COOKIE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
 export async function authController(fastify: FastifyInstance) {
-  fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
-    const data = RegisterRequestSchema.parse(request.body);
-    const user = await authService.register(data);
+  fastify.post(
+    '/register',
+    AUTH_RATE_LIMIT,
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const data = RegisterRequestSchema.parse(request.body);
+      const user = await authService.register(data);
 
-    const token = fastify.jwt.sign({ sub: user.id });
+      const token = fastify.jwt.sign({ sub: user.id }, { expiresIn: '7d' });
 
-    reply.setCookie('access_token', token, {
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    });
+      reply.setCookie('access_token', token, {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: COOKIE_MAX_AGE_SECONDS,
+        expires: new Date(Date.now() + COOKIE_MAX_AGE_SECONDS * 1000),
+      });
 
-    return { success: true, data: user };
-  });
+      return { success: true, data: user };
+    }
+  );
 
-  fastify.post('/login', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/login', AUTH_RATE_LIMIT, async (request: FastifyRequest, reply: FastifyReply) => {
     const data = LoginRequestSchema.parse(request.body);
     const user = await authService.login(data);
 
-    const token = fastify.jwt.sign({ sub: user.id });
+    const token = fastify.jwt.sign({ sub: user.id }, { expiresIn: '7d' });
 
     reply.setCookie('access_token', token, {
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      maxAge: COOKIE_MAX_AGE_SECONDS,
+      expires: new Date(Date.now() + COOKIE_MAX_AGE_SECONDS * 1000),
     });
 
     return { success: true, data: user };

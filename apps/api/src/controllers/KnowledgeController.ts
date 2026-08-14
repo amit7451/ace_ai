@@ -40,11 +40,9 @@ export async function knowledgeController(fastify: FastifyInstance) {
   fastify.get('/:id/file', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const orgId = request.organization?.id || (request.query as any)?.orgId;
-    const { buffer, mimeType, filename } = await knowledgeService.getDocumentFile(id, orgId);
+    const { signedUrl } = await knowledgeService.getSignedDocumentUrl(id, orgId);
 
-    reply.header('Content-Type', mimeType);
-    reply.header('Content-Disposition', `inline; filename="${filename}"`);
-    return reply.send(buffer);
+    return reply.redirect(signedUrl);
   });
 
   fastify.delete('/:id', async (request: FastifyRequest) => {

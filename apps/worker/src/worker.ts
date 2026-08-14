@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { QueueName, JobName, UploadJobPayload, CrawlJobPayload } from '@ion-ai/queue';
 import { R2StorageProvider } from '@ion-ai/storage';
+import { logger } from '@ion-ai/logger';
 import { IngestionPipeline } from './pipeline/ingestion.pipeline';
 import { CrawlerPipeline } from './pipeline/crawler.pipeline';
 import { env } from '@ion-ai/config';
@@ -12,9 +13,6 @@ export class WorkerApplication {
   private crawlerPipeline: CrawlerPipeline;
 
   constructor() {
-    console.log('[DEBUG] process.cwd() =', process.cwd());
-    console.log('[DEBUG] env.R2_ACCOUNT_ID =', env.R2_ACCOUNT_ID);
-
     const storageProvider = new R2StorageProvider({
       accountId: env.R2_ACCOUNT_ID ?? '',
       accessKeyId: env.R2_ACCESS_KEY_ID ?? '',
@@ -38,10 +36,10 @@ export class WorkerApplication {
     });
 
     this.ingestionWorker.on('completed', (job) => {
-      console.log(`${job.id} has completed!`);
+      logger.info(`Job ${job.id} on ${QueueName.INGESTION} completed`);
     });
     this.ingestionWorker.on('failed', (job, err) => {
-      console.error(`${job?.id} has failed with ${err.message}`);
+      logger.error({ jobId: job?.id, error: err.message }, `Job on ${QueueName.INGESTION} failed`);
     });
 
     // Lower concurrency than ingestion: each crawl job already fans out
@@ -56,10 +54,10 @@ export class WorkerApplication {
     });
 
     this.crawlerWorker.on('completed', (job) => {
-      console.log(`Crawl job ${job.id} has completed!`);
+      logger.info(`Crawl job ${job.id} completed`);
     });
     this.crawlerWorker.on('failed', (job, err) => {
-      console.error(`Crawl job ${job?.id} has failed with ${err.message}`);
+      logger.error({ jobId: job?.id, error: err.message }, `Crawl job failed`);
     });
   }
 
@@ -69,7 +67,7 @@ export class WorkerApplication {
     } else if (job.name === JobName.DELETE) {
       await this.ingestionPipeline.processDeleteJob(job.data as any, job.id!);
     } else {
-      console.warn(`Unknown job name on ${QueueName.INGESTION}: ${job.name}`);
+      logger.warn(`Unknown job name on ${QueueName.INGESTION}: ${job.name}`);
     }
   }
 
@@ -77,12 +75,12 @@ export class WorkerApplication {
     if (job.name === JobName.CRAWL) {
       await this.crawlerPipeline.processCrawlJob(job.data as CrawlJobPayload, job.id!);
     } else {
-      console.warn(`Unknown job name on ${QueueName.CRAWLER}: ${job.name}`);
+      logger.warn(`Unknown job name on ${QueueName.CRAWLER}: ${job.name}`);
     }
   }
 
   async start() {
-    console.log('Worker started and listening for jobs...');
+    logger.info('Worker started and listening for jobs');
   }
 
   async stop() {

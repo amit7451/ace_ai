@@ -2,6 +2,7 @@ import { prisma } from '@ion-ai/database';
 import { resolveEmbeddingProvider } from '../lib/resolve-embedding-provider';
 import { IStorageProvider } from '@ion-ai/storage';
 import { ParserFactory } from '@ion-ai/parser';
+import { logger } from '@ion-ai/logger';
 import {
   KnowledgeProcessor,
   EmbeddingProviderFactory,
@@ -17,7 +18,10 @@ export class IngestionPipeline {
   ) {}
 
   async processUploadJob(job: UploadJobPayload, jobId: string) {
-    console.log(`Starting ingestion job for ${job.documentId} in org ${job.organizationId}`);
+    logger.info(
+      { documentId: job.documentId, organizationId: job.organizationId },
+      'Starting ingestion job'
+    );
 
     // Update job status
     await prisma.ingestionJob.updateMany({
@@ -117,7 +121,11 @@ export class IngestionPipeline {
 
       await vectorStore.upsertBatch(collectionName, vectors);
 
-      // 6. Store metadata in Postgres
+      // 6. Store metadata in Postgres (clean existing chunks for documentId first to guarantee idempotency on retry)
+      await prisma.chunk.deleteMany({
+        where: { documentId: job.documentId },
+      });
+
       for (const vector of vectors) {
         await prisma.chunk.create({
           data: {
@@ -145,9 +153,9 @@ export class IngestionPipeline {
         data: { status: 'COMPLETED' },
       });
 
-      console.log(`Ingestion completed for ${job.documentId}`);
+      logger.info({ documentId: job.documentId }, 'Ingestion completed successfully');
     } catch (error: any) {
-      console.error(`Ingestion failed for ${job.documentId}:`, error);
+      logger.error({ documentId: job.documentId, error: error.message }, 'Ingestion failed');
       await prisma.ingestionJob.updateMany({
         where: { knowledgeSourceId: job.knowledgeSourceId },
         data: {
@@ -173,16 +181,23 @@ export class IngestionPipeline {
     },
     jobId: string
   ) {
-    console.log(`Starting delete job for ${job.documentId} in org ${job.organizationId}`);
+    logger.info(
+      { knowledgeSourceId: job.knowledgeSourceId, organizationId: job.organizationId },
+      'Starting delete job'
+    );
     try {
       // 1. Delete from R2 Storage
-      try {
-        console.log(`Deleting from R2: ${job.storageKey}`);
-        await this.storageProvider.delete(job.storageKey);
-        console.log(`Successfully deleted from R2: ${job.storageKey}`);
-      } catch (e: any) {
-        console.error(`R2 Deletion Error:`, e);
-        throw e;
+      if (job.storageKey) {
+        try {
+          logger.info({ storageKey: job.storageKey }, 'Deleting from R2 storage');
+          await this.storageProvider.delete(job.storageKey);
+          logger.info({ storageKey: job.storageKey }, 'Successfully deleted from R2');
+        } catch (e: any) {
+          logger.warn(
+            { storageKey: job.storageKey, error: e.message },
+            'R2 Deletion non-fatal error (continuing cleanup)'
+          );
+        }
       }
 
       // 2. Delete from Qdrant Vector Store
@@ -193,26 +208,56 @@ export class IngestionPipeline {
           url: this.qdrantUrl,
         });
 
-        // Use deleteByFilter on knowledgeSourceId to ensure all vectors in Qdrant are deleted,
-        // even if Postgres chunks are missing (e.g., due to a crash between upserting to Qdrant
-        // and inserting chunks to Postgres during ingestion).
-        await vectorStore.deleteByFilter(collectionName, {
-          must: [{ key: 'knowledgeSourceId', match: { value: job.knowledgeSourceId } }],
-        });
+        const exists = await vectorStore.collectionExists(collectionName);
+        if (exists) {
+          // Use deleteByFilter on knowledgeSourceId to ensure all vectors in Qdrant are deleted,
+          // even if Postgres chunks are missing (e.g., due to a crash between upserting to Qdrant
+          // and inserting chunks to Postgres during ingestion).
+          await vectorStore.deleteByFilter(collectionName, {
+            must: [{ key: 'knowledgeSourceId', match: { value: job.knowledgeSourceId } }],
+          });
+          logger.info(
+            { knowledgeSourceId: job.knowledgeSourceId },
+            'Successfully deleted vectors from Qdrant'
+          );
+        } else {
+          logger.info(
+            { collectionName },
+            'Qdrant collection does not exist. Skipping vector deletion'
+          );
+        }
       } catch (e: any) {
-        console.error(`Qdrant Deletion Error:`, e);
-        throw e;
+        // If collection does not exist (404/NOT_FOUND), deletion is already satisfied (idempotent)
+        if (
+          e.name === 'VectorStoreNotFoundError' ||
+          e.code === 'NOT_FOUND' ||
+          e.statusCode === 404 ||
+          e.message?.includes('Not found') ||
+          e.cause?.status?.error?.includes("doesn't exist")
+        ) {
+          logger.info(
+            { knowledgeSourceId: job.knowledgeSourceId },
+            'Qdrant collection or vectors not found. Skipping vector deletion'
+          );
+        } else {
+          logger.warn(
+            { knowledgeSourceId: job.knowledgeSourceId, error: e.message },
+            'Qdrant Deletion error (continuing cleanup)'
+          );
+        }
       }
 
       // 3. Delete from Postgres
       // Due to cascade delete settings, deleting the KnowledgeSource might delete Document and Chunks automatically.
       // But let's safely delete them in order if cascade isn't set up.
-      await prisma.chunk.deleteMany({
-        where: { documentId: job.documentId },
-      });
-      await prisma.document.deleteMany({
-        where: { id: job.documentId },
-      });
+      if (job.documentId) {
+        await prisma.chunk.deleteMany({
+          where: { documentId: job.documentId },
+        });
+        await prisma.document.deleteMany({
+          where: { id: job.documentId },
+        });
+      }
       await prisma.ingestionJob.deleteMany({
         where: { knowledgeSourceId: job.knowledgeSourceId },
       });
@@ -220,9 +265,15 @@ export class IngestionPipeline {
         where: { id: job.knowledgeSourceId },
       });
 
-      console.log(`Deletion completed for ${job.documentId}`);
+      logger.info(
+        { knowledgeSourceId: job.knowledgeSourceId },
+        'Deletion completed for knowledge source'
+      );
     } catch (error: any) {
-      console.error(`Deletion failed for ${job.documentId}:`, error);
+      logger.error(
+        { knowledgeSourceId: job.knowledgeSourceId, error: error.message },
+        'Deletion failed for knowledge source'
+      );
       // Mark as failed deletion so the user knows it didn't fully delete
       await prisma.knowledgeSource.updateMany({
         where: { id: job.knowledgeSourceId },

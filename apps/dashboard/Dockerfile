@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat
 RUN npm install -g pnpm turbo
 WORKDIR /app
 
@@ -10,6 +11,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter @ion-ai/dashboard... build
 
 FROM node:20-alpine AS runner
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN npm install -g pnpm
 

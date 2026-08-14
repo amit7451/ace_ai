@@ -114,7 +114,7 @@ export default function ProfilePage() {
                 ACCOUNT DETAILS
               </h2>
               <span className="text-[10px] text-zinc-500">
-                // USER ID: {user?.id?.slice(0, 10)}...
+                {'//'} USER ID: {user?.id?.slice(0, 10)}...
               </span>
             </div>
 

@@ -5,6 +5,8 @@ import { CreateCrawlJobRequest } from '@ion-ai/contracts';
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
 import { CrawlerRepository } from '../repositories/CrawlerRepository';
 
+const MAX_CONCURRENT_CRAWLS_PER_ORG = 3;
+
 export class CrawlerService {
   constructor(
     private crawlerRepo: CrawlerRepository,
@@ -50,6 +52,17 @@ export class CrawlerService {
         throw Object.assign(new Error(err.message), { statusCode: 400 });
       }
       throw err;
+    }
+
+    // Tenant fairness: cap concurrent active crawls per organization to prevent worker queue starvation
+    const activeCount = await this.crawlerRepo.countActiveByOrganizationId(organizationId);
+    if (activeCount >= MAX_CONCURRENT_CRAWLS_PER_ORG) {
+      throw Object.assign(
+        new Error(
+          `Concurrent crawl limit reached. Your organization already has ${activeCount} active crawl jobs (maximum allowed: ${MAX_CONCURRENT_CRAWLS_PER_ORG}). Please wait for an active crawl to complete or cancel one before creating a new one.`
+        ),
+        { statusCode: 429 }
+      );
     }
 
     const existingActive = await this.crawlerRepo.findActiveByUrl(organizationId, input.url);
@@ -102,6 +115,16 @@ export class CrawlerService {
 
     if (crawler.status !== 'FAILED') {
       throw Object.assign(new Error('Only failed crawlers can be retried'), { statusCode: 400 });
+    }
+
+    const activeCount = await this.crawlerRepo.countActiveByOrganizationId(organizationId);
+    if (activeCount >= MAX_CONCURRENT_CRAWLS_PER_ORG) {
+      throw Object.assign(
+        new Error(
+          `Concurrent crawl limit reached. Your organization already has ${activeCount} active crawl jobs (maximum allowed: ${MAX_CONCURRENT_CRAWLS_PER_ORG}). Please wait for an active crawl to complete before retrying this job.`
+        ),
+        { statusCode: 429 }
+      );
     }
 
     // Clear any previous failed job instance from BullMQ before re-queuing

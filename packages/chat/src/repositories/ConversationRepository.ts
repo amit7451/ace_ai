@@ -24,11 +24,16 @@ export class ConversationRepository {
     });
   }
 
-  async findManyByOrganizationId(organizationId: string) {
+  async findManyByOrganizationId(
+    organizationId: string,
+    options?: { take?: number; skip?: number }
+  ) {
     return prisma.conversation.findMany({
       where: { organizationId },
       orderBy: { lastActivity: 'desc' },
       include: { visitor: true },
+      take: options?.take ?? 100,
+      skip: options?.skip ?? 0,
     });
   }
 

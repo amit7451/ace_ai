@@ -4,7 +4,9 @@ import Image from 'next/image';
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-[#08080a] text-zinc-200 flex flex-col items-center justify-center p-6 text-center font-mono">
-      <div className="text-xs text-zinc-500 tracking-widest uppercase mb-2">// 404_NOT_FOUND</div>
+      <div className="text-xs text-zinc-500 tracking-widest uppercase mb-2">
+        {'// 404_NOT_FOUND'}
+      </div>
       <div className="flex items-center gap-3 mb-4">
         <Image
           src="/modbit.webp"

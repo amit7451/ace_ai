@@ -25,11 +25,16 @@ export class KnowledgeRepository {
     });
   }
 
-  async findManyByOrganizationId(organizationId: string) {
+  async findManyByOrganizationId(
+    organizationId: string,
+    options?: { take?: number; skip?: number }
+  ) {
     return prisma.knowledgeSource.findMany({
       where: { organizationId },
       include: { document: true, ingestionJobs: true },
       orderBy: { createdAt: 'desc' },
+      take: options?.take ?? 100,
+      skip: options?.skip ?? 0,
     });
   }
 

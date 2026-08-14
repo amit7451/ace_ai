@@ -17,6 +17,14 @@ export class ChatRepository {
     return prisma.visitorSession.create({ data });
   }
 
+  async upsertVisitorSession(organizationId: string, ipHash: string, userAgent?: string) {
+    return prisma.visitorSession.upsert({
+      where: { organizationId_ipHash: { organizationId, ipHash } },
+      create: { organizationId, ipHash, userAgent },
+      update: { lastSeen: new Date(), ...(userAgent ? { userAgent } : {}) },
+    });
+  }
+
   async getOrganizationConfig(organizationId: string) {
     return prisma.organizationConfiguration.findUnique({
       where: { organizationId },

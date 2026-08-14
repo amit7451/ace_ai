@@ -292,7 +292,7 @@ export default function PlaygroundPage() {
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-2">
                 <span className="text-sm font-bold tracking-widest text-zinc-400">
-                  // PLAYGROUND ACTIVE
+                  {'// PLAYGROUND ACTIVE'}
                 </span>
                 <p className="text-xs text-center max-w-sm">
                   Query your institution&apos;s Knowledge Base in real time. Context chunks and
@@ -426,7 +426,7 @@ export default function PlaygroundPage() {
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-zinc-500 p-6 text-center space-y-2">
                 <span className="text-xs uppercase tracking-widest text-zinc-400">
-                  // NO ACTIVE METRICS
+                  {'// NO ACTIVE METRICS'}
                 </span>
                 <p className="text-xs text-zinc-500">
                   Send a message in playground chat to view vector retrieval chunks.

@@ -43,6 +43,7 @@ import { ChatController } from './controllers/ChatController';
 import { WidgetController } from './controllers/WidgetController';
 import { ConversationController } from './controllers/ConversationController';
 
+import rateLimit from '@fastify/rate-limit';
 import { auditLogController } from './controllers/AuditLogController';
 
 // Plugins
@@ -56,9 +57,18 @@ server.register(cookie, {
   hook: 'onRequest',
 });
 
+server.register(rateLimit, {
+  global: false,
+  errorResponseBuilder: (req, context) => ({
+    statusCode: 429,
+    error: 'Too Many Requests',
+    message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
+  }),
+});
+
 server.register(multipart, {
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB
+    fileSize: 5 * 1024 * 1024, // 5MB limit matching business rule
   },
 });
 
@@ -70,8 +80,8 @@ server.register(
   async (api) => {
     api.register(authController, { prefix: '/auth' });
     api.register(organizationController, { prefix: '/organizations' });
-    api.register(memberController, { prefix: '/organizations/:id/members' });
-    api.register(auditLogController, { prefix: '/organizations/:id/audit-logs' });
+    api.register(memberController, { prefix: '/organizations/:orgId/members' });
+    api.register(auditLogController, { prefix: '/organizations/:orgId/audit-logs' });
     api.register(configurationController, { prefix: '/configuration' });
     api.register(knowledgeController, { prefix: '/knowledge' });
     api.register(crawlerController, { prefix: '/crawlers' });
@@ -132,9 +142,19 @@ server.setErrorHandler((error, request, reply) => {
   });
 });
 
-// Health Endpoints
+// Health & Readiness Endpoints
 server.get('/health', async () => ({ status: 'ok' }));
-server.get('/ready', async () => ({ status: 'ready' }));
+
+server.get('/ready', async (request, reply) => {
+  try {
+    const { prisma } = await import('@ion-ai/database');
+    await prisma.$queryRaw`SELECT 1`;
+    return { status: 'ready', database: 'connected' };
+  } catch (err: any) {
+    reply.status(503);
+    return { status: 'unhealthy', database: 'disconnected', error: err.message };
+  }
+});
 
 // Start server
 const start = async () => {

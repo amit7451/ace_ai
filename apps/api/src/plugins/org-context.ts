@@ -17,10 +17,21 @@ declare module 'fastify' {
 export default fp(async (fastify: FastifyInstance) => {
   fastify.decorate('requireOrganization', async (request: FastifyRequest, reply: FastifyReply) => {
     // Look for org ID in params (/:orgId), headers (x-organization-id), or query string
-    const orgId =
-      (request.params as any).orgId ||
-      request.headers['x-organization-id'] ||
-      (request.query as any).orgId;
+    const paramOrgId = (request.params as any)?.orgId;
+    const headerOrgId =
+      typeof request.headers['x-organization-id'] === 'string'
+        ? request.headers['x-organization-id']
+        : undefined;
+    const queryOrgId = (request.query as any)?.orgId;
+
+    if (paramOrgId && headerOrgId && paramOrgId !== headerOrgId) {
+      throw Object.assign(
+        new Error('Organization ID in URL path does not match x-organization-id header'),
+        { statusCode: 400 }
+      );
+    }
+
+    const orgId = paramOrgId || headerOrgId || queryOrgId;
 
     if (!orgId || typeof orgId !== 'string') {
       throw Object.assign(new Error('Organization context required'), { statusCode: 400 });

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { prisma } from '@ion-ai/database';
 import { IStorageProvider } from '@ion-ai/storage';
+import { logger } from '@ion-ai/logger';
 import {
   KnowledgeProcessor,
   EmbeddingProviderFactory,
@@ -32,11 +33,14 @@ export class CrawlerPipeline {
   ) {}
 
   async processCrawlJob(job: CrawlJobPayload, _jobId: string): Promise<void> {
-    console.log(`Starting crawl job ${job.crawlJobId} for org ${job.organizationId}: ${job.url}`);
+    logger.info(
+      { crawlJobId: job.crawlJobId, organizationId: job.organizationId, url: job.url },
+      'Starting crawl job'
+    );
 
     const crawlJob = await prisma.crawlJob.findUnique({ where: { id: job.crawlJobId } });
     if (!crawlJob) {
-      console.error(`CrawlJob ${job.crawlJobId} not found; nothing to do.`);
+      logger.error({ crawlJobId: job.crawlJobId }, 'CrawlJob not found; nothing to do');
       return;
     }
     if (crawlJob.organizationId !== job.organizationId) {
@@ -178,6 +182,11 @@ export class CrawlerPipeline {
 
         await vectorStore.upsertBatch(collectionName, vectors);
 
+        // Delete existing chunks for document before re-inserting
+        await prisma.chunk.deleteMany({
+          where: { documentId: document.id },
+        });
+
         for (const vector of vectors) {
           await prisma.chunk.create({
             data: {
@@ -224,7 +233,10 @@ export class CrawlerPipeline {
           // A single page's ingestion failing (bad embedding response, R2
           // hiccup, etc.) must not take the rest of a 50-page crawl down with
           // it — record it as a failed page and keep going.
-          console.error(`Failed to ingest ${page.url} (crawl ${job.crawlJobId}):`, err);
+          logger.error(
+            { url: page.url, crawlJobId: job.crawlJobId, error: (err as any)?.message },
+            'Failed to ingest crawled page'
+          );
           await this.upsertPage(
             job.crawlJobId,
             { ...page, status: 'FAILED', errorMessage: err.message ?? String(err) },
@@ -266,8 +278,11 @@ export class CrawlerPipeline {
       renderJsFallback: async (url) => {
         try {
           return await renderer.render(url);
-        } catch (err) {
-          console.warn(`[crawl ${job.crawlJobId}] SPA fallback render failed for ${url}:`, err);
+        } catch (err: any) {
+          logger.warn(
+            { crawlJobId: job.crawlJobId, url, error: err?.message },
+            'SPA fallback render failed'
+          );
           return null;
         }
       },

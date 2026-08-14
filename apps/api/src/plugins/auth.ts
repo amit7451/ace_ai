@@ -21,6 +21,9 @@ declare module '@fastify/jwt' {
 export default fp(async (fastify: FastifyInstance) => {
   fastify.register(fastifyJwt, {
     secret: env.JWT_SECRET,
+    sign: {
+      expiresIn: '7d',
+    },
     cookie: {
       cookieName: 'access_token',
       signed: false,

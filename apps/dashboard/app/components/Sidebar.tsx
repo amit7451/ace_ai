@@ -78,7 +78,7 @@ export default function Sidebar() {
               ModBit
             </span>
           </div>
-          <span className="text-[10px] text-zinc-500 font-normal">// DASH</span>
+          <span className="text-[10px] text-zinc-500 font-normal">{'// DASH'}</span>
         </Link>
 
         {/* Organization Name Display */}

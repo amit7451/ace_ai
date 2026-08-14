@@ -107,13 +107,15 @@ model OrganizationApiKey {
 
 model AuditLog {
   id             String       @id @default(uuid())
-  organizationId String
+  organizationId String?
   action         String
   actorId        String?
   metadata       Json?
   createdAt      DateTime     @default(now())
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
 }
 
 // -----------------------------------------
@@ -138,6 +140,8 @@ model KnowledgeSource {
   // it already produced — that's a separate, deliberate action from the
   // Knowledge page.
   crawledPage    CrawledPage?
+
+  @@index([organizationId, createdAt])
 }
 
 enum KnowledgeStatus {
@@ -178,6 +182,9 @@ model Chunk {
   createdAt  DateTime @default(now())
 
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
 }
 
 model CrawlJob {
@@ -256,6 +263,8 @@ model IngestionJob {
   updatedAt         DateTime        @updatedAt
 
   knowledgeSource   KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeSourceId])
 }
 
 enum JobStatus {
@@ -308,6 +317,9 @@ model VisitorSession {
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversations  Conversation[]
+
+  @@unique([organizationId, ipHash])
+  @@index([organizationId, ipHash])
 }
 
 model Conversation {
@@ -324,6 +336,8 @@ model Conversation {
   deployment     Deployment?    @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
   visitor        VisitorSession? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
   messages       Message[]
+
+  @@index([organizationId, lastActivity])
 }
 
 enum ConversationStatus {
@@ -347,6 +361,8 @@ model Message {
   createdAt      DateTime     @default(now())
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 enum MessageRole {

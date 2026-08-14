@@ -30,6 +30,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @ion-ai/database db:generate
 
+      - name: Build Workspaces
+        run: pnpm run build
+
       - name: Lint
         run: pnpm run lint
 
@@ -38,6 +41,3 @@ jobs:
 
       - name: Test
         run: pnpm run test
-
-      - name: Build
-        run: pnpm run build

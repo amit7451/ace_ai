@@ -52,6 +52,19 @@ export class CrawlerRepository {
     });
   }
 
+  /**
+   * Count active (PENDING or RUNNING) crawl jobs for an organization
+   * to enforce tenant concurrency limits and prevent queue starvation.
+   */
+  async countActiveByOrganizationId(organizationId: string): Promise<number> {
+    return prisma.crawlJob.count({
+      where: {
+        organizationId,
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+    });
+  }
+
   /** Completed page URLs for a job — used by the pipeline to skip re-embedding on retry. */
   async findCompletedPageUrls(crawlJobId: string): Promise<string[]> {
     const pages = await prisma.crawledPage.findMany({
