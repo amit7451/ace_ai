@@ -126,8 +126,24 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
         })}\n\n`
       );
 
-      for await (const chunk of stream) {
-        reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      let isClientClosed = false;
+      const onClientClose = () => {
+        isClientClosed = true;
+      };
+      request.raw.on('close', onClientClose);
+
+      try {
+        for await (const chunk of stream) {
+          if (isClientClosed || request.raw.destroyed || reply.raw.destroyed) {
+            break;
+          }
+          reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        }
+      } finally {
+        request.raw.off('close', onClientClose);
+        if (!reply.raw.writableEnded) {
+          reply.raw.end();
+        }
       }
     } catch (err: any) {
       const institutionSupport = organizationId

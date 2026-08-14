@@ -168,17 +168,20 @@ export class IonWidget {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
+      let sseBuffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const dataStr = trimmed.slice(6);
             try {
               const data = JSON.parse(dataStr);
               if (data.type === 'metadata' && data.conversationId) {
@@ -194,6 +197,20 @@ export class IonWidget {
               console.error('Failed to parse SSE data', dataStr);
             }
           }
+        }
+      }
+
+      if (sseBuffer.trim().startsWith('data: ')) {
+        const dataStr = sseBuffer.trim().slice(6);
+        try {
+          const data = JSON.parse(dataStr);
+          if (data.type === 'chunk' && data.content) {
+            if (fullResponse === '') responseEl.innerHTML = '';
+            fullResponse += data.content;
+            this.updateMessage(responseEl, fullResponse);
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE data', dataStr);
         }
       }
     } catch (err) {

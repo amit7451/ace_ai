@@ -66,6 +66,7 @@ export default function HostedChatPage({ params }: { params: { widgetKey: string
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantMsg = '';
+      let sseBuffer = '';
 
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
@@ -73,12 +74,14 @@ export default function HostedChatPage({ params }: { params: { widgetKey: string
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const dataStr = trimmed.slice(6);
             try {
               const data = JSON.parse(dataStr);
               if (data.type === 'metadata' && data.conversationId) {

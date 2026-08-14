@@ -63,4 +63,47 @@ describe('ConversationService', () => {
       });
     });
   });
+
+  describe('verifyOwnership', () => {
+    it('should return conversation when organizationId matches', async () => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        id: 'conv-1',
+        organizationId: 'org-A',
+        deploymentId: 'dep-1',
+      });
+
+      const result = await conversationService.verifyOwnership('conv-1', 'org-A', 'dep-1');
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe('conv-1');
+    });
+
+    it('should return null when cross-tenant organizationId does not match', async () => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        id: 'conv-1',
+        organizationId: 'org-B',
+        deploymentId: 'dep-1',
+      });
+
+      const result = await conversationService.verifyOwnership('conv-1', 'org-A', 'dep-1');
+      expect(result).toBeNull();
+    });
+
+    it('should return null when cross-widget deploymentId does not match', async () => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        id: 'conv-1',
+        organizationId: 'org-A',
+        deploymentId: 'dep-2',
+      });
+
+      const result = await conversationService.verifyOwnership('conv-1', 'org-A', 'dep-1');
+      expect(result).toBeNull();
+    });
+
+    it('should return null when conversation does not exist', async () => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const result = await conversationService.verifyOwnership('non-existent', 'org-A');
+      expect(result).toBeNull();
+    });
+  });
 });
