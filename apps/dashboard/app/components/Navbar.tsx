@@ -18,6 +18,8 @@ export default function Navbar() {
             alt="ModBit Logo"
             width={28}
             height={28}
+            priority
+            style={{ width: 'auto', height: 'auto' }}
             className="w-7 h-7 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.2)] group-hover:scale-110 transition-transform duration-200"
           />
           <span className="font-bold text-xl tracking-[0.25em] text-zinc-100 uppercase">

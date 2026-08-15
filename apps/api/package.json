@@ -16,7 +16,7 @@
     "@fastify/cors": "^9.0.1",
     "@fastify/jwt": "^8.0.1",
     "@fastify/multipart": "^8.3.0",
-    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/rate-limit": "^9.1.0",
     "@ion-ai/auth": "workspace:*",
     "@ion-ai/chat": "workspace:*",
     "@ion-ai/config": "workspace:*",
@@ -27,7 +27,7 @@
     "@ion-ai/queue": "workspace:*",
     "@ion-ai/storage": "workspace:*",
     "fastify": "^4.27.0",
-    "fastify-plugin": "^6.0.0",
+    "fastify-plugin": "^4.5.1",
     "uuid": "^14.0.1",
     "zod": "^3.23.8"
   },

@@ -288,9 +288,8 @@ const FALLBACK_MODELS: Record<
 > = {
   gemini: {
     llm: [
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Recommended)' },
       { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
       { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
     ],
     embedding: [
@@ -369,9 +368,8 @@ const FALLBACK_MODELS: Record<
   },
   testing: {
     llm: [
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Global Env)' },
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Global Env)' },
       { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Global Env)' },
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Global Env)' },
     ],
     embedding: [{ id: 'gemini-embedding-001', name: 'Gemini Embedding 001 (Global Env - 768d)' }],
   },

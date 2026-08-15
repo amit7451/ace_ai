@@ -87,6 +87,8 @@ export default function LoginPage() {
               alt="ModBit Logo"
               width={36}
               height={36}
+              priority
+              style={{ width: 'auto', height: 'auto' }}
               className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]"
             />
             <h1 className="text-3xl font-bold tracking-[0.2em] text-zinc-100 uppercase">ModBit</h1>

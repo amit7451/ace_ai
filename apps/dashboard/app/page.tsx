@@ -33,7 +33,8 @@ export default function Home() {
                 width={120}
                 height={120}
                 priority
-                className="relative w-18 sm:w-22 md:w-26 h-auto object-contain filter drop-shadow-[0_0_6px_rgba(255,255,255,0.08)] group-hover:scale-105 transition-transform duration-300"
+                style={{ width: 'auto', height: 'auto' }}
+                className="relative w-18 sm:w-22 md:w-26 object-contain filter drop-shadow-[0_0_6px_rgba(255,255,255,0.08)] group-hover:scale-105 transition-transform duration-300"
               />
             </div>
             {/* pl offset corrects optical centering with letter-spacing */}

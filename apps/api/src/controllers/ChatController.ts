@@ -126,21 +126,23 @@ export const ChatController: FastifyPluginAsync = async (fastify) => {
         })}\n\n`
       );
 
-      let isClientClosed = false;
-      const onClientClose = () => {
-        isClientClosed = true;
+      let isClientDisconnected = false;
+      const onDisconnect = () => {
+        if (!reply.raw.writableEnded) {
+          isClientDisconnected = true;
+        }
       };
-      request.raw.on('close', onClientClose);
+      reply.raw.on('close', onDisconnect);
 
       try {
         for await (const chunk of stream) {
-          if (isClientClosed || request.raw.destroyed || reply.raw.destroyed) {
+          if (isClientDisconnected || reply.raw.destroyed || reply.raw.closed) {
             break;
           }
           reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
         }
       } finally {
-        request.raw.off('close', onClientClose);
+        reply.raw.off('close', onDisconnect);
         if (!reply.raw.writableEnded) {
           reply.raw.end();
         }

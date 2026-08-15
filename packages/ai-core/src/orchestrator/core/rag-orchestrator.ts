@@ -105,12 +105,15 @@ export class RagOrchestrator implements IAIOrchestrator {
         { role: 'user', content: query },
         { role: 'assistant', content: fullContent },
       ]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[RagOrchestrator] Stream error:', err);
       if (err instanceof OrchestratorError) {
         yield { type: 'error', error: err.message };
       } else {
-        yield { type: 'error', error: 'Failed to execute stream orchestration pipeline' };
+        yield {
+          type: 'error',
+          error: err?.message || 'Failed to execute stream orchestration pipeline',
+        };
       }
     }
   }

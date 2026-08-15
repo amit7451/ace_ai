@@ -40,13 +40,11 @@ describe('GeminiProvider', () => {
   });
 
   it('uses the x-goog-api-key header rather than exposing the key in the URL', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValue(
-        jsonResponse(200, {
-          candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
-        })
-      );
+    const fetchMock = jest.fn().mockResolvedValue(
+      jsonResponse(200, {
+        candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+      })
+    );
     global.fetch = fetchMock as unknown as typeof fetch;
 
     const provider = new GeminiProvider(config);
@@ -108,5 +106,53 @@ describe('GeminiProvider', () => {
 
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toContain(':streamGenerateContent?alt=sse');
+  });
+
+  it('dynamically discovers available generation models via listAvailableModels', async () => {
+    const listResponse = jsonResponse(200, {
+      models: [
+        { name: 'models/gemini-1.5-flash-latest', supportedGenerationMethods: ['generateContent'] },
+        { name: 'models/gemini-1.5-pro', supportedGenerationMethods: ['generateContent'] },
+        { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+      ],
+    });
+    global.fetch = jest.fn().mockResolvedValue(listResponse) as unknown as typeof fetch;
+
+    const provider = new GeminiProvider(config);
+    const models = await provider.listAvailableModels();
+    expect(models).toEqual(['gemini-1.5-flash-latest', 'gemini-1.5-pro']);
+  });
+
+  it('self-heals on 404 model not found by discovering live models and retrying', async () => {
+    const error404 = errorResponse(
+      404,
+      'models/non-existent-model is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.'
+    );
+    const listResponse = jsonResponse(200, {
+      models: [
+        { name: 'models/gemini-1.5-flash-latest', supportedGenerationMethods: ['generateContent'] },
+      ],
+    });
+    const successResponse = jsonResponse(200, {
+      candidates: [{ content: { parts: [{ text: 'Recovered answer' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 },
+    });
+
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(error404)
+      .mockResolvedValueOnce(listResponse)
+      .mockResolvedValueOnce(successResponse);
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new GeminiProvider({
+      provider: 'gemini',
+      apiKey: 'gm-key-test',
+      model: 'non-existent-model',
+    });
+
+    const res = await provider.complete([{ role: 'user', content: 'Hello' }]);
+    expect(res.content).toBe('Recovered answer');
+    expect(res.model).toBe('gemini-1.5-flash-latest');
   });
 });

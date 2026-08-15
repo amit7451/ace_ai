@@ -14,8 +14,8 @@ import { env } from '@ion-ai/config';
 import type { InstitutionSupportInfo, KeySourceType } from '@ion-ai/contracts';
 
 const DEFAULT_LLM_MODELS: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
-  testing: 'gemini-2.5-flash',
+  gemini: 'gemini-1.5-flash',
+  testing: 'gemini-1.5-flash',
   openai: 'gpt-4o-mini',
   anthropic: 'claude-3-5-sonnet-20241022',
   groq: 'llama-3.3-70b-versatile',
@@ -48,7 +48,7 @@ export class ChatService {
     if (llmProviderRaw === 'testing') {
       llmProviderName = 'gemini';
       if (!orgConfig.llmModel) {
-        llmModel = process.env.LLM_MODEL || 'gemini-2.5-flash';
+        llmModel = process.env.LLM_MODEL || DEFAULT_LLM_MODELS.gemini;
       }
       if (context === 'widget') {
         throw new Error(

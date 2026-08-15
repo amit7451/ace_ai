@@ -25,7 +25,7 @@ server.addHook('onRequest', (req, reply, done) => {
 server.addHook('onResponse', (req, reply, done) => {
   if (req.method !== 'OPTIONS' && !req.url.startsWith('/api/v1/jobs/stream')) {
     req.log.info(
-      { res: { statusCode: reply.statusCode }, responseTime: reply.getResponseTime() },
+      { res: { statusCode: reply.statusCode }, responseTime: reply.elapsedTime },
       'request completed'
     );
   }
