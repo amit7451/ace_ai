@@ -44,10 +44,16 @@ function loadEnvironment() {
 loadEnvironment();
 
 const envSchema = z.object({
+  // ── Core Server & Network ──
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.string().default('3001').transform(Number),
-  DATABASE_URL: z.string().url(),
-  JWT_SECRET: z.string().min(32),
+  FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  API_BASE_URL: z.string().url().default('http://localhost:3001'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+
+  // ── Security & Cryptography (Required) ──
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   ENCRYPTION_KEY: z
     .string()
     .min(32)
@@ -55,25 +61,49 @@ const envSchema = z.object({
       /^[0-9a-fA-F]+$/,
       "ENCRYPTION_KEY must be a hex string (use: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\")"
     ),
-  FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  OLD_ENCRYPTION_KEY: z.string().optional(),
 
-  // Storage (Cloudflare R2)
+  // ── Redis & Queue ──
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.string().default('6379'),
+  REDIS_PASSWORD: z.string().optional(),
+  WORKER_INGESTION_CONCURRENCY: z.string().default('5').transform(Number),
+  WORKER_CRAWLER_CONCURRENCY: z.string().default('2').transform(Number),
+
+  // ── Vector Database (Qdrant) ──
+  QDRANT_URL: z.string().default('http://localhost:6333'),
+  QDRANT_API_KEY: z.string().optional(),
+
+  // ── Storage (AWS S3 / Cloudflare R2) ──
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET_NAME: z.string().default('ion-ai-knowledge'),
 
-  // Queue & DB (Redis / Qdrant)
-  REDIS_HOST: z.string().default('localhost'),
-  REDIS_PORT: z.string().default('6379'),
-  REDIS_PASSWORD: z.string().optional(),
-  QDRANT_URL: z.string().default('http://localhost:6333'),
-  WORKER_INGESTION_CONCURRENCY: z.string().default('5').transform(Number),
-  WORKER_CRAWLER_CONCURRENCY: z.string().default('2').transform(Number),
-
-  // AI Providers
-  OPENAI_API_KEY: z.string().optional(),
+  // ── Global System Free-Tier / Fallback AI Keys ──
   GEMINI_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  COHERE_API_KEY: z.string().optional(),
+
+  // ── AI Model Defaults ──
+  LLM_PROVIDER: z.string().default('gemini'),
+  LLM_MODEL: z.string().default('gemini-1.5-flash'),
+  EMBEDDING_PROVIDER: z.string().default('gemini'),
+  EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
+
+  // ── Cost Controls, Quotas & Rate Limits ──
+  MAX_MESSAGE_CHARACTERS: z.string().default('4000').transform(Number),
+  DAILY_FREE_TIER_REQUEST_LIMIT: z.string().default('100').transform(Number),
+  GLOBAL_SHARED_KEY_RPM_LIMIT: z.string().default('2000').transform(Number),
+  ORGANIZATION_FREE_TIER_RPM_LIMIT: z.string().default('500').transform(Number),
+  VISITOR_RPM_LIMIT: z.string().default('20').transform(Number),
+  WIDGET_RPM_LIMIT: z.string().default('100').transform(Number),
+  MAX_FREE_TIER_OUTPUT_TOKENS: z.string().default('1024').transform(Number),
+  MAX_FREE_TIER_TOP_K: z.string().default('5').transform(Number),
+  MAX_CONTEXT_TOKENS: z.string().default('4096').transform(Number),
 });
 
 const parsed = envSchema.safeParse(process.env);

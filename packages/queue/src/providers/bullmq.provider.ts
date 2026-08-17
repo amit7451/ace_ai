@@ -40,7 +40,7 @@ export class BullMQProvider implements IQueueProvider {
             count: 1000,
           },
           removeOnFail: {
-            age: 7 * 24 * 3600, // 7 days
+            age: 7 * 24 * 3600, // 7 days retention for operator recovery
             count: 5000,
           },
         },
@@ -97,5 +97,11 @@ export class BullMQProvider implements IQueueProvider {
     if (job) {
       await job.remove();
     }
+  }
+
+  async close(): Promise<void> {
+    const closePromises = Array.from(this.queues.values()).map((queue) => queue.close());
+    await Promise.all(closePromises);
+    this.queues.clear();
   }
 }

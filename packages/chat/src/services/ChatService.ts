@@ -10,6 +10,7 @@ import {
   LLMError,
 } from '@ai-chatbot-platform/ai-core';
 import { PrismaMemoryProvider } from './PrismaMemoryProvider';
+import { rateLimitService } from './RateLimitService';
 import { env } from '@ion-ai/config';
 import type { InstitutionSupportInfo, KeySourceType } from '@ion-ai/contracts';
 
@@ -48,7 +49,7 @@ export class ChatService {
     if (llmProviderRaw === 'testing') {
       llmProviderName = 'gemini';
       if (!orgConfig.llmModel) {
-        llmModel = process.env.LLM_MODEL || DEFAULT_LLM_MODELS.gemini;
+        llmModel = env.LLM_MODEL || DEFAULT_LLM_MODELS.gemini;
       }
       if (context === 'widget') {
         throw new Error(
@@ -62,7 +63,7 @@ export class ChatService {
         llmApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
         keySource = 'ORGANIZATION_CUSTOM_KEY';
       } else {
-        llmApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+        llmApiKey = env.GEMINI_API_KEY || '';
         keySource = 'SYSTEM_FREE_TIER';
       }
 
@@ -87,7 +88,7 @@ export class ChatService {
         if (context === 'widget') {
           throw new Error('API key for Google Gemini is required for live widgets.');
         }
-        llmApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+        llmApiKey = env.GEMINI_API_KEY || '';
         keySource = 'SYSTEM_FREE_TIER';
       }
 
@@ -96,8 +97,17 @@ export class ChatService {
       }
     }
 
+    // Cost guardrail: clamp max output tokens on free tier
+    const resolvedMaxTokens =
+      keySource === 'SYSTEM_FREE_TIER'
+        ? Math.min(
+            orgConfig.maxTokens ?? env.MAX_FREE_TIER_OUTPUT_TOKENS,
+            env.MAX_FREE_TIER_OUTPUT_TOKENS
+          )
+        : (orgConfig.maxTokens ?? undefined);
+
     console.log(
-      `[ChatService] Initializing LLM: provider=${llmProviderName}, model=${llmModel}, keySource=${keySource}`
+      `[ChatService] Initializing LLM: provider=${llmProviderName}, model=${llmModel}, keySource=${keySource}, maxTokens=${resolvedMaxTokens}`
     );
 
     const llm = LLMProviderFactory.create({
@@ -105,7 +115,7 @@ export class ChatService {
       apiKey: llmApiKey,
       model: llmModel,
       temperature: orgConfig.temperature ?? 0.7,
-      maxTokens: orgConfig.maxTokens ?? undefined,
+      maxTokens: resolvedMaxTokens,
     });
 
     const embedderProviderRaw = (orgConfig.embeddingProvider || 'testing') as string;
@@ -119,7 +129,7 @@ export class ChatService {
     if (embedderProviderRaw === 'testing') {
       embedderProviderName = 'gemini';
       if (!orgConfig.embeddingModel) {
-        embedderModel = process.env.EMBEDDING_MODEL || 'gemini-embedding-001';
+        embedderModel = env.EMBEDDING_MODEL || 'gemini-embedding-001';
       }
 
       const apiKeyRecord = await chatRepository.getOrganizationApiKey(organizationId, 'gemini');
@@ -127,7 +137,7 @@ export class ChatService {
         const { decryptApiKey } = await import('@ion-ai/config');
         embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
       } else {
-        embedderApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+        embedderApiKey = env.GEMINI_API_KEY || '';
       }
 
       if (!embedderApiKey) {
@@ -146,7 +156,7 @@ export class ChatService {
         const { decryptApiKey } = await import('@ion-ai/config');
         embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
       } else if (embedderProviderRaw === 'gemini') {
-        embedderApiKey = process.env.GEMINI_API_KEY || (env as any).GEMINI_API_KEY || '';
+        embedderApiKey = env.GEMINI_API_KEY || '';
       }
 
       if (!embedderApiKey) {
@@ -169,13 +179,19 @@ export class ChatService {
     const vectorStore = VectorStoreProviderFactory.create({
       provider: 'qdrant',
       url: env.QDRANT_URL as string,
-      apiKey: process.env.QDRANT_API_KEY as string,
+      apiKey: env.QDRANT_API_KEY,
     });
 
     const collectionName = `org_${organizationId.replace(/-/g, '_')}`;
 
+    // Cost guardrail: clamp retrieval topK on free tier
+    const resolvedTopK =
+      keySource === 'SYSTEM_FREE_TIER'
+        ? Math.min(orgConfig.topK ?? env.MAX_FREE_TIER_TOP_K, env.MAX_FREE_TIER_TOP_K)
+        : (orgConfig.topK ?? 5);
+
     const retriever = new RagRetriever(embedder, vectorStore, {
-      topK: orgConfig.topK ?? 5,
+      topK: resolvedTopK,
       scoreThreshold: orgConfig.scoreThreshold ?? 0.7,
       collection: collectionName,
     });
@@ -224,6 +240,15 @@ Your ONLY allowed actions are:
   }> {
     const { orchestrator, keySource, institutionSupport, welcomeMessage } =
       await this.createOrchestrator(organizationId, context);
+
+    // Enforce global shared key and daily quota protection when on system free tier
+    if (keySource === 'SYSTEM_FREE_TIER') {
+      await rateLimitService.checkGlobalSharedKeyLimit();
+      await rateLimitService.checkDailyFreeTierLimit(
+        organizationId,
+        env.DAILY_FREE_TIER_REQUEST_LIMIT
+      );
+    }
 
     return {
       stream: orchestrator.stream({

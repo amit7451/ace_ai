@@ -1,5 +1,5 @@
 import { prisma } from '@ion-ai/database';
-import { env } from '@ion-ai/config';
+import { env, decryptApiKey } from '@ion-ai/config';
 
 export interface ResolvedEmbeddingProvider {
   providerName: string;
@@ -32,7 +32,7 @@ export async function resolveEmbeddingProvider(
   if (providerNameRaw === 'testing') {
     providerName = 'gemini';
     if (!orgConfig?.embeddingModel) {
-      model = process.env.EMBEDDING_MODEL || 'gemini-embedding-001';
+      model = env.EMBEDDING_MODEL || 'gemini-embedding-001';
     }
 
     const apiKeyRecord = await prisma.organizationApiKey.findUnique({
@@ -45,10 +45,9 @@ export async function resolveEmbeddingProvider(
     });
 
     if (apiKeyRecord) {
-      const { decryptApiKey } = await import('@ion-ai/config');
       apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
     } else {
-      apiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || '';
+      apiKey = env.GEMINI_API_KEY || '';
     }
 
     if (!apiKey) {
@@ -71,10 +70,9 @@ export async function resolveEmbeddingProvider(
     });
 
     if (apiKeyRecord) {
-      const { decryptApiKey } = await import('@ion-ai/config');
       apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
     } else if (providerNameRaw === 'gemini') {
-      apiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || '';
+      apiKey = env.GEMINI_API_KEY || '';
     }
 
     if (!apiKey) {

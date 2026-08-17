@@ -1,12 +1,26 @@
 import { IStorageProvider } from '@ion-ai/storage';
 import { IQueueProvider, QueueName, JobName, UploadJobPayload } from '@ion-ai/queue';
 import { prisma } from '@ion-ai/database';
+import {
+  EmbeddingProviderFactory,
+  VectorStoreProviderFactory,
+  RagRetriever,
+} from '@ai-chatbot-platform/ai-core';
+import { env, decryptApiKey } from '@ion-ai/config';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
 import { KnowledgeRepository } from '../repositories/KnowledgeRepository';
 import { JobRepository } from '../repositories/JobRepository';
+
+const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
+  gemini: 'gemini-embedding-001',
+  testing: 'gemini-embedding-001',
+  openai: 'text-embedding-3-small',
+  cohere: 'embed-english-v3.0',
+  ollama: 'nomic-embed-text',
+};
 
 export class KnowledgeService {
   constructor(
@@ -296,5 +310,109 @@ export class KnowledgeService {
     if (mime === 'text/plain') return 'TXT';
     if (mime === 'text/markdown' || mime === 'text/md') return 'MARKDOWN';
     return 'TXT';
+  }
+
+  async searchKnowledge(
+    organizationId: string,
+    query: string,
+    options?: { topK?: number; scoreThreshold?: number }
+  ) {
+    const orgConfig = await prisma.organizationConfiguration.findUnique({
+      where: { organizationId },
+    });
+
+    const providerNameRaw = (orgConfig?.embeddingProvider ?? 'testing') as string;
+    let providerName = providerNameRaw;
+    let model =
+      orgConfig?.embeddingModel ||
+      DEFAULT_EMBEDDING_MODELS[providerNameRaw] ||
+      'text-embedding-3-small';
+    let apiKey = '';
+
+    if (providerNameRaw === 'testing') {
+      providerName = 'gemini';
+      if (!orgConfig?.embeddingModel) {
+        model = env.EMBEDDING_MODEL || 'gemini-embedding-001';
+      }
+
+      const apiKeyRecord = await prisma.organizationApiKey.findUnique({
+        where: {
+          organizationId_provider: {
+            organizationId,
+            provider: 'gemini',
+          },
+        },
+      });
+
+      if (apiKeyRecord) {
+        apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      } else {
+        apiKey = env.GEMINI_API_KEY || '';
+      }
+
+      if (!apiKey) {
+        throw Object.assign(
+          new Error('Global GEMINI_API_KEY for testing embedding provider is not configured.'),
+          { statusCode: 400 }
+        );
+      }
+    } else if (providerNameRaw === 'ollama') {
+      providerName = 'ollama';
+      apiKey = 'ollama-local';
+    } else {
+      providerName = providerNameRaw;
+      const apiKeyRecord = await prisma.organizationApiKey.findUnique({
+        where: {
+          organizationId_provider: {
+            organizationId,
+            provider: providerNameRaw,
+          },
+        },
+      });
+
+      if (apiKeyRecord) {
+        apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
+      } else if (providerNameRaw === 'gemini') {
+        apiKey = env.GEMINI_API_KEY || '';
+      }
+
+      if (!apiKey) {
+        throw Object.assign(
+          new Error(`API key for embedding provider '${providerNameRaw}' is not configured.`),
+          { statusCode: 400 }
+        );
+      }
+    }
+
+    const embedder = EmbeddingProviderFactory.create({
+      provider: providerName as any,
+      apiKey,
+      model,
+    });
+
+    const vectorStore = VectorStoreProviderFactory.create({
+      provider: 'qdrant',
+      url: env.QDRANT_URL ?? 'http://localhost:6333',
+    });
+
+    const collectionName = `org_${organizationId.replace(/-/g, '_')}`;
+    const effectiveTopK = options?.topK ?? orgConfig?.topK ?? 5;
+    const effectiveScoreThreshold = options?.scoreThreshold ?? orgConfig?.scoreThreshold ?? 0.5;
+
+    const retriever = new RagRetriever(embedder, vectorStore, {
+      topK: effectiveTopK,
+      scoreThreshold: effectiveScoreThreshold,
+      collection: collectionName,
+    });
+
+    const results = await retriever.retrieve({
+      query,
+      tenantId: organizationId,
+      assistantId: 'default',
+      topK: effectiveTopK,
+      scoreThreshold: effectiveScoreThreshold,
+    });
+
+    return results;
   }
 }

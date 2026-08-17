@@ -32,7 +32,11 @@ export class CrawlerPipeline {
     private qdrantUrl: string
   ) {}
 
-  async processCrawlJob(job: CrawlJobPayload, _jobId: string): Promise<void> {
+  async processCrawlJob(
+    job: CrawlJobPayload,
+    _jobId: string,
+    bullmqJob?: import('bullmq').Job
+  ): Promise<void> {
     logger.info(
       { crawlJobId: job.crawlJobId, organizationId: job.organizationId, url: job.url },
       'Starting crawl job'
@@ -312,7 +316,24 @@ export class CrawlerPipeline {
       console.log(`Crawl ${job.crawlJobId} finished:`, summary);
     } catch (err: any) {
       console.error(`Crawl ${job.crawlJobId} failed:`, err);
-      await this.failJob(job.crawlJobId, err.message ?? String(err));
+      const maxAttempts = bullmqJob?.opts?.attempts ?? 3;
+      const attemptsMade = (bullmqJob?.attemptsMade ?? 0) + 1;
+      const isFinalAttempt = attemptsMade >= maxAttempts;
+
+      if (!isFinalAttempt) {
+        await prisma.crawlJob.update({
+          where: { id: job.crawlJobId },
+          data: {
+            status: 'RETRYING',
+            errorDetails: `Attempt ${attemptsMade}/${maxAttempts} failed: ${err.message ?? String(err)}`,
+          },
+        });
+      } else {
+        await this.failJob(
+          job.crawlJobId,
+          `All ${maxAttempts} attempts failed. Last error: ${err.message ?? String(err)}`
+        );
+      }
       throw err; // let BullMQ record the job-level failure/retry too
     } finally {
       await renderer

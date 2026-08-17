@@ -45,6 +45,7 @@ import { ConversationController } from './controllers/ConversationController';
 
 import rateLimit from '@fastify/rate-limit';
 import { auditLogController } from './controllers/AuditLogController';
+import { invitationController } from './controllers/InvitationController';
 
 // Plugins
 server.register(cors, {
@@ -89,6 +90,7 @@ server.register(
     api.register(ChatController, { prefix: '/chat' });
     api.register(WidgetController, { prefix: '/widgets' });
     api.register(ConversationController, { prefix: '/conversations' });
+    api.register(invitationController, { prefix: '/invitations' });
   },
   { prefix: '/api/v1' }
 );
@@ -166,6 +168,36 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} received. Starting graceful shutdown sequence...`);
+  try {
+    // 1. Close Fastify HTTP listener and drain active in-flight requests
+    await server.close();
+    logger.info('HTTP server closed. In-flight requests drained.');
+
+    // 2. Disconnect Prisma PostgreSQL connection pool
+    const { prisma } = await import('@ion-ai/database');
+    await prisma.$disconnect();
+    logger.info('Prisma database connections disconnected.');
+
+    // 3. Close BullMQ queue instances
+    const { queueProvider } = await import('./di');
+    if (queueProvider && typeof queueProvider.close === 'function') {
+      await queueProvider.close();
+      logger.info('BullMQ queue connections closed.');
+    }
+
+    logger.info('Graceful shutdown completed successfully.');
+    process.exit(0);
+  } catch (err: any) {
+    logger.error({ err }, 'Error during graceful shutdown');
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 start();
 

@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  nginx:
+    build:
+      context: .
+      dockerfile: infrastructure/nginx/Dockerfile
+    container_name: ion-ai-nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    depends_on:
+      api:
+        condition: service_healthy
+      dashboard:
+        condition: service_healthy
+    networks:
+      - ion-internal
+
   postgres:
     image: postgres:15-alpine
     container_name: ion-ai-postgres
@@ -53,8 +69,6 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: ion-ai-api
     restart: unless-stopped
-    ports:
-      - '${PORT:-3001}:3001'
     env_file:
       - .env
     environment:
@@ -71,6 +85,12 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - ion-internal
 
@@ -103,18 +123,23 @@ services:
       context: .
       dockerfile: apps/dashboard/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: ion-ai-dashboard
     restart: unless-stopped
-    ports:
-      - '3000:3000'
     env_file:
       - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - ion-internal
 

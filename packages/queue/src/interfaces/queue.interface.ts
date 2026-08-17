@@ -19,4 +19,5 @@ export interface IQueueProvider {
   cleanFailed(queueName: string, organizationId?: string): Promise<void>;
   removeJob(queueName: string, jobId: string): Promise<void>;
   isPaused(queueName: string): Promise<boolean>;
+  close(): Promise<void>;
 }

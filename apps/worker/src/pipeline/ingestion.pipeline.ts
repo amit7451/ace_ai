@@ -17,7 +17,7 @@ export class IngestionPipeline {
     private qdrantUrl: string
   ) {}
 
-  async processUploadJob(job: UploadJobPayload, jobId: string) {
+  async processUploadJob(job: UploadJobPayload, jobId: string, bullmqJob?: import('bullmq').Job) {
     logger.info(
       { documentId: job.documentId, organizationId: job.organizationId },
       'Starting ingestion job'
@@ -155,19 +155,46 @@ export class IngestionPipeline {
 
       logger.info({ documentId: job.documentId }, 'Ingestion completed successfully');
     } catch (error: any) {
-      logger.error({ documentId: job.documentId, error: error.message }, 'Ingestion failed');
-      await prisma.ingestionJob.updateMany({
-        where: { knowledgeSourceId: job.knowledgeSourceId },
-        data: {
-          status: 'FAILED',
-          failureReason: error.message,
-          finishedAt: new Date(),
-        },
-      });
-      await prisma.knowledgeSource.update({
-        where: { id: job.knowledgeSourceId },
-        data: { status: 'FAILED' },
-      });
+      const maxAttempts = bullmqJob?.opts?.attempts ?? 3;
+      const attemptsMade = (bullmqJob?.attemptsMade ?? 0) + 1;
+      const isFinalAttempt = attemptsMade >= maxAttempts;
+
+      if (!isFinalAttempt) {
+        logger.warn(
+          { documentId: job.documentId, attemptsMade, maxAttempts, error: error.message },
+          'Ingestion job attempt failed; marking RETRYING for queue backoff'
+        );
+        await prisma.ingestionJob.updateMany({
+          where: { knowledgeSourceId: job.knowledgeSourceId },
+          data: {
+            status: 'RETRYING',
+            retryCount: attemptsMade,
+            failureReason: `Attempt ${attemptsMade}/${maxAttempts} failed: ${error.message}`,
+          },
+        });
+        await prisma.knowledgeSource.update({
+          where: { id: job.knowledgeSourceId },
+          data: { status: 'RETRYING' },
+        });
+      } else {
+        logger.error(
+          { documentId: job.documentId, attemptsMade, maxAttempts, error: error.message },
+          'Ingestion job exhausted all retry attempts; marking FAILED'
+        );
+        await prisma.ingestionJob.updateMany({
+          where: { knowledgeSourceId: job.knowledgeSourceId },
+          data: {
+            status: 'FAILED',
+            retryCount: attemptsMade,
+            failureReason: `All ${maxAttempts} attempts failed. Last error: ${error.message}`,
+            finishedAt: new Date(),
+          },
+        });
+        await prisma.knowledgeSource.update({
+          where: { id: job.knowledgeSourceId },
+          data: { status: 'FAILED' },
+        });
+      }
       throw error;
     }
   }

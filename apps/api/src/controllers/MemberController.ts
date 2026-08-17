@@ -4,7 +4,7 @@ import { Role } from '@ion-ai/auth';
 import { z } from 'zod';
 
 const InviteMemberSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email('Valid email address is required'),
   role: z.nativeEnum(Role),
 });
 
@@ -17,6 +17,11 @@ export async function memberController(fastify: FastifyInstance) {
     return { success: true, data: members };
   });
 
+  fastify.get('/invitations', async (request: FastifyRequest) => {
+    const invitations = await memberService.getPendingInvitations(request.organization!.id);
+    return { success: true, data: invitations };
+  });
+
   fastify.post('/invitations', async (request: FastifyRequest) => {
     const data = InviteMemberSchema.parse(request.body);
     const result = await memberService.inviteMember(
@@ -25,6 +30,17 @@ export async function memberController(fastify: FastifyInstance) {
       request.memberRole!, // Populated by requireOrganization
       data.email,
       data.role
+    );
+    return result;
+  });
+
+  fastify.delete('/invitations/:invitationId', async (request: FastifyRequest) => {
+    const { invitationId } = request.params as { invitationId: string };
+    const result = await memberService.revokeInvitation(
+      request.organization!.id,
+      invitationId,
+      request.user.sub,
+      request.memberRole!
     );
     return result;
   });

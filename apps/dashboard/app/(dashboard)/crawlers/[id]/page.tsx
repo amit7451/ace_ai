@@ -23,7 +23,7 @@ interface CrawledPage {
 interface CrawlJobDetail {
   id: string;
   url: string;
-  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  status: 'PENDING' | 'RUNNING' | 'RETRYING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   maxPages: number;
   maxDepth: number;
   includePaths: string[];

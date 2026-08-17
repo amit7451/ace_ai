@@ -41,18 +41,15 @@ export class WorkerApplication {
       logger.info(`Job ${job.id} on ${QueueName.INGESTION} completed`);
     });
     this.ingestionWorker.on('failed', (job, err) => {
-      logger.error({ jobId: job?.id, error: err.message }, `Job on ${QueueName.INGESTION} failed`);
+      logger.error(
+        { jobId: job?.id, attemptsMade: job?.attemptsMade, error: err.message },
+        `Job on ${QueueName.INGESTION} failed attempt`
+      );
     });
     this.ingestionWorker.on('error', (err) => {
       logger.error({ error: err.message }, `Ingestion worker connection error`);
     });
 
-    // Lower concurrency than ingestion: each crawl job already fans out
-    // several concurrent page fetches internally (see
-    // CRAWLER_DEFAULTS.concurrency in @ion-ai/crawler), so this bounds how
-    // many *whole crawls* run at once platform-wide, not how many HTTP
-    // requests are in flight — that's bounded separately, per job, by the
-    // crawler engine itself.
     this.crawlerWorker = new Worker(QueueName.CRAWLER, this.processCrawlerJob.bind(this), {
       connection,
       concurrency: env.WORKER_CRAWLER_CONCURRENCY,
@@ -62,7 +59,10 @@ export class WorkerApplication {
       logger.info(`Crawl job ${job.id} completed`);
     });
     this.crawlerWorker.on('failed', (job, err) => {
-      logger.error({ jobId: job?.id, error: err.message }, `Crawl job failed`);
+      logger.error(
+        { jobId: job?.id, attemptsMade: job?.attemptsMade, error: err.message },
+        `Crawl job failed attempt`
+      );
     });
     this.crawlerWorker.on('error', (err) => {
       logger.error({ error: err.message }, `Crawler worker connection error`);
@@ -71,7 +71,7 @@ export class WorkerApplication {
 
   private async processIngestionJob(job: Job) {
     if (job.name === JobName.UPLOAD) {
-      await this.ingestionPipeline.processUploadJob(job.data as UploadJobPayload, job.id!);
+      await this.ingestionPipeline.processUploadJob(job.data as UploadJobPayload, job.id!, job);
     } else if (job.name === JobName.DELETE) {
       await this.ingestionPipeline.processDeleteJob(job.data as any, job.id!);
     } else {
@@ -81,7 +81,7 @@ export class WorkerApplication {
 
   private async processCrawlerJob(job: Job) {
     if (job.name === JobName.CRAWL) {
-      await this.crawlerPipeline.processCrawlJob(job.data as CrawlJobPayload, job.id!);
+      await this.crawlerPipeline.processCrawlJob(job.data as CrawlJobPayload, job.id!, job);
     } else {
       logger.warn(`Unknown job name on ${QueueName.CRAWLER}: ${job.name}`);
     }

@@ -18,7 +18,8 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  memberships   OrganizationMember[]
+  memberships     OrganizationMember[]
+  invitationsSent OrganizationInvitation[]
 }
 
 model Organization {
@@ -30,6 +31,7 @@ model Organization {
   updatedAt     DateTime  @updatedAt
 
   members          OrganizationMember[]
+  invitations      OrganizationInvitation[]
   configuration    OrganizationConfiguration?
   apiKeys          OrganizationApiKey[]
   auditLogs        AuditLog[]
@@ -54,6 +56,32 @@ model OrganizationMember {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(uuid())
+  organizationId String
+  email          String
+  role           MemberRole       @default(VIEWER)
+  token          String           @unique
+  invitedById    String
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([organizationId, email])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
 }
 
 enum MemberRole {
@@ -147,6 +175,7 @@ model KnowledgeSource {
 enum KnowledgeStatus {
   PENDING
   PROCESSING
+  RETRYING
   COMPLETED
   FAILED
 }
@@ -270,6 +299,7 @@ model IngestionJob {
 enum JobStatus {
   PENDING
   RUNNING
+  RETRYING
   COMPLETED
   FAILED
   CANCELLED

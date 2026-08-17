@@ -82,7 +82,7 @@ export class CrawlerService {
       includePaths: input.includePaths ?? [],
       excludePaths: input.excludePaths ?? [],
       respectRobotsTxt: input.respectRobotsTxt ?? true,
-      sameOriginOnly: input.sameOriginOnly ?? true,
+      sameOriginOnly: true,
     });
 
     await this.queueProvider.addJob(

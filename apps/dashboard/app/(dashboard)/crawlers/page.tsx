@@ -11,7 +11,7 @@ const API_URL = API_BASE_URL;
 interface CrawlJob {
   id: string;
   url: string;
-  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  status: 'PENDING' | 'RUNNING' | 'RETRYING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   maxPages: number;
   maxDepth: number;
   pagesDiscovered: number;
@@ -23,7 +23,7 @@ interface CrawlJob {
   finishedAt: string | null;
 }
 
-const ACTIVE_STATUSES: CrawlJob['status'][] = ['PENDING', 'RUNNING'];
+const ACTIVE_STATUSES: CrawlJob['status'][] = ['PENDING', 'RUNNING', 'RETRYING'];
 
 export default function CrawlersPage() {
   const [crawlers, setCrawlers] = useState<CrawlJob[]>([]);

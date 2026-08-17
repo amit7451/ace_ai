@@ -1,4 +1,10 @@
-import { resolvePublicAddress, SsrfBlockedError } from './ssrf-guard';
+import {
+  resolvePublicAddress,
+  assertValidSeedUrl,
+  isBlockedHostname,
+  isBlockedPort,
+  SsrfBlockedError,
+} from './ssrf-guard';
 
 // Typed as `any` deliberately: `playwright-core` is a real (heavy, browser-
 // binary-requiring) dependency, but making the whole @ion-ai/crawler package
@@ -33,27 +39,13 @@ const DEFAULT_BLOCKED_RESOURCE_TYPES = ['image', 'font', 'media'];
 /**
  * Renders a page with a real browser, for sites that don't put their
  * content in the initial HTML response — client-rendered React/Vue/Angular
- * SPAs being the common case (see content/spa-detection.ts for how the
- * static path decides it needs this).
+ * SPAs being the common case.
  *
- * One Chromium process is reused across every page in a crawl (launching a
- * browser per page is far too slow/expensive); each page gets its own
- * throwaway BrowserContext so cookies/storage never leak between pages.
- *
- * SECURITY — this closes a *different* SSRF gap than safe-fetch.ts, and
- * closes it less tightly. Once a page's JavaScript is allowed to run, that
- * JS can issue its own requests (fetch/XHR/iframes/WebSocket) — every one
- * of those is intercepted and validated here via `context.route()`, the
- * same as the top-level navigation. What this can't do, unlike
- * safe-fetch.ts's custom DNS `lookup`, is pin the browser's socket to the
- * exact IP that was validated: Playwright doesn't expose that level of
- * control, so there's a narrow DNS-rebinding TOCTOU window between "we
- * resolved and allowed this hostname" and "Chromium's own resolver connects
- * to it". Treat this as the application-layer check it is — real network
- * egress policy (block RFC1918/link-local/cloud-metadata ranges at the
- * container/VPC level for whatever host runs this) is the actual boundary
- * for browser-based fetching of untrusted URLs, the same as it would be for
- * any headless-browser crawler regardless of implementation.
+ * SECURITY: Every subresource, XHR, fetch, iframe, and redirect is intercepted
+ * and validated with multi-layered SSRF guards:
+ * 1. Protocol and sensitive port screening (blocking DB, cache, internal management ports).
+ * 2. Internal container and cluster hostnames/suffixes blocking.
+ * 3. DNS-resolution against private, link-local, and cloud metadata IP ranges.
  */
 export class BrowserRenderer {
   private browserPromise: ReturnType<PlaywrightModule['chromium']['launch']> | null = null;
@@ -66,7 +58,12 @@ export class BrowserRenderer {
       this.browserPromise = chromium.launch({
         headless: true,
         executablePath: this.options.executablePath,
-        args: ['--disable-dev-shm-usage', '--no-sandbox'],
+        args: [
+          '--disable-dev-shm-usage',
+          '--no-sandbox',
+          '--disable-gpu',
+          '--disable-background-networking',
+        ],
       });
       // Clear it if it fails to launch so we don't cache a rejected promise forever
       this.browserPromise.catch(() => {
@@ -77,6 +74,9 @@ export class BrowserRenderer {
   }
 
   async render(url: string): Promise<BrowserRenderResult> {
+    // Structural pre-flight validation on the root seed target
+    assertValidSeedUrl(url);
+
     const browser = await this.ensureBrowser();
     const context = await browser.newContext({
       userAgent:
@@ -96,10 +96,29 @@ export class BrowserRenderer {
         return route.abort('failed');
       }
 
+      // 1. Protocol filtering
       if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
         return route.abort('blockedbyclient');
       }
 
+      // 2. Sensitive internal service port filtering
+      if (targetUrl.port && isBlockedPort(targetUrl.port)) {
+        console.error(`Blocked sensitive port access: ${targetUrl.href}`);
+        return route.abort('blockedbyclient');
+      }
+
+      // 3. Internal hostname & domain suffix filtering
+      if (isBlockedHostname(targetUrl.hostname)) {
+        console.error(`Blocked internal hostname access: ${targetUrl.href}`);
+        return route.abort('blockedbyclient');
+      }
+
+      // 4. Resource type filtering (media/images/fonts)
+      if (blockedTypes.has(request.resourceType())) {
+        return route.abort('blockedbyclient');
+      }
+
+      // 5. DNS verification against private, link-local and cloud-metadata IP ranges
       try {
         let dnsPromise = dnsCache.get(targetUrl.hostname);
         if (!dnsPromise) {
@@ -109,16 +128,11 @@ export class BrowserRenderer {
         await dnsPromise;
       } catch (err) {
         if (err instanceof SsrfBlockedError) {
-          console.error(`Blocked SSRF: ${targetUrl.href}`);
+          console.error(`Blocked SSRF subresource: ${targetUrl.href} (${(err as Error).message})`);
           return route.abort('blockedbyclient');
         }
         console.error(`Failed resolving ${targetUrl.hostname}: ${err}`);
         return route.abort('failed');
-      }
-
-      if (blockedTypes.has(request.resourceType())) {
-        console.error(`Blocked by resource type (${request.resourceType()}): ${targetUrl.href}`);
-        return route.abort('blockedbyclient');
       }
 
       return route.continue();
@@ -134,8 +148,7 @@ export class BrowserRenderer {
       } catch (err: any) {
         // Plenty of real sites never go fully network-idle (analytics
         // beacons, long-poll/websocket connections). If it times out waiting
-        // for networkidle, the DOM is still fully intact and whatever JS
-        // managed to run has already run. Do NOT reload the page.
+        // for networkidle, the DOM is still fully intact. Do NOT reload the page.
         if (!err.message?.includes('Timeout')) {
           throw err;
         }

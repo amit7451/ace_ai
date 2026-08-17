@@ -2,27 +2,8 @@ import dns from 'node:dns';
 import net from 'node:net';
 
 /**
- * Blocks the crawler from being used as an SSRF vector against your own
+ * Blocks the crawler from being used as an SSRF vector against internal
  * infrastructure (internal services, cloud metadata endpoints, etc.).
- *
- * This is a real risk for this feature specifically: the seed URL is
- * supplied by an org admin, and this code runs server-side in your worker,
- * inside your VPC/cloud account. A malicious or merely careless admin could
- * enter `http://169.254.169.254/latest/meta-data/` or `http://localhost:6379`
- * and, without this guard, your crawler would happily fetch it on their
- * behalf and hand the response back to them via the ingested "knowledge".
- *
- * Two checks are required, not one:
- *  1. `assertPublicHostname` — a cheap pre-flight check when a CrawlJob is
- *     created, so obviously-bad input is rejected immediately with a clear
- *     error instead of silently queued.
- *  2. `resolvePublicAddress` — called by `safe-fetch.ts` immediately before
- *     every single TCP connection (initial request AND every redirect hop).
- *     This is the one that actually matters: DNS can resolve differently
- *     between the time you check and the time you connect ("DNS rebinding"),
- *     so the address that gets validated must be the *exact* address that
- *     gets connected to — never re-resolved in between. See safe-fetch.ts
- *     for how the two are kept atomic via a custom `lookup` function.
  */
 
 export class SsrfBlockedError extends Error {
@@ -32,7 +13,7 @@ export class SsrfBlockedError extends Error {
   }
 }
 
-const BLOCKED_IPV4_RANGES: Array<[string, number]> = [
+export const BLOCKED_IPV4_RANGES: Array<[string, number]> = [
   ['0.0.0.0', 8], // "this" network
   ['10.0.0.0', 8], // RFC1918
   ['100.64.0.0', 10], // CGNAT (RFC6598) — also used by some cloud metadata proxies
@@ -48,6 +29,72 @@ const BLOCKED_IPV4_RANGES: Array<[string, number]> = [
   ['224.0.0.0', 4], // multicast
   ['240.0.0.0', 4], // reserved
 ];
+
+export const BLOCKED_HOSTNAMES = new Set([
+  'localhost',
+  '127.0.0.1',
+  '::1',
+  '0.0.0.0',
+  'postgres',
+  'redis',
+  'qdrant',
+  'api',
+  'worker',
+  'dashboard',
+  'nginx',
+  'db',
+  'cache',
+  'host.docker.internal',
+  'gateway.docker.internal',
+  'kubernetes.default',
+  'kubernetes.default.svc',
+  'metadata.google.internal',
+  'instance-data',
+  'metadata',
+]);
+
+export const BLOCKED_DOMAIN_SUFFIXES = [
+  '.localhost',
+  '.local',
+  '.internal',
+  '.lan',
+  '.home',
+  '.corp',
+  '.intra',
+  '.invalid',
+  '.test',
+  '.cluster.local',
+  '.svc',
+];
+
+export const BLOCKED_PORTS = new Set([
+  21, // FTP
+  22, // SSH
+  23, // Telnet
+  25, // SMTP
+  53, // DNS
+  110, // POP3
+  143, // IMAP
+  465, // SMTPS
+  587, // Submission
+  993, // IMAPS
+  995, // POP3S
+  2375, // Docker daemon (unencrypted)
+  2376, // Docker daemon (TLS)
+  2379, // etcd
+  2380, // etcd
+  3306, // MySQL
+  5432, // PostgreSQL
+  6379, // Redis
+  6333, // Qdrant HTTP
+  6334, // Qdrant gRPC
+  9090, // Prometheus
+  9100, // Node Exporter
+  10250, // Kubelet
+  10255, // Kubelet read-only
+  11434, // Ollama
+  27017, // MongoDB
+]);
 
 function ipv4ToLong(ip: string): number {
   return ip.split('.').reduce((acc, octet) => (acc << 8) + Number(octet), 0) >>> 0;
@@ -79,17 +126,28 @@ function isBlockedIPv6(ip: string): boolean {
 export function isBlockedIp(ip: string): boolean {
   if (net.isIPv4(ip)) return isBlockedIPv4(ip);
   if (net.isIPv6(ip)) return isBlockedIPv6(ip);
-  // Not a parseable IP literal at all — treat as blocked, the caller should
-  // have resolved a hostname to an IP before calling this.
   return true;
 }
 
+/** True if the given hostname is an internal container, loopback, or private domain. */
+export function isBlockedHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase().trim();
+  if (BLOCKED_HOSTNAMES.has(lower)) return true;
+  if (BLOCKED_DOMAIN_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return true;
+  return false;
+}
+
+/** True if the given port is a known sensitive internal service port. */
+export function isBlockedPort(port: string | number): boolean {
+  if (!port) return false;
+  const num = typeof port === 'number' ? port : parseInt(port, 10);
+  if (isNaN(num)) return false;
+  return BLOCKED_PORTS.has(num);
+}
+
 /**
- * Cheap, DNS-free structural validation done at CrawlJob-creation time:
- * rejects bad protocols, credentials-in-URL, and IP literals that are
- * obviously private. Does NOT resolve hostnames — that happens per-request
- * in safe-fetch.ts, right before connecting, which is the check that
- * actually has to hold.
+ * Structural validation done at CrawlJob-creation time and before browser navigation:
+ * rejects bad protocols, credentials-in-URL, private IP literals, and internal hostnames/ports.
  */
 export function assertValidSeedUrl(rawUrl: string): URL {
   let parsed: URL;
@@ -108,8 +166,12 @@ export function assertValidSeedUrl(rawUrl: string): URL {
   }
 
   const hostname = parsed.hostname.toLowerCase();
-  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
-    throw new SsrfBlockedError('Crawling localhost is not allowed.');
+  if (isBlockedHostname(hostname)) {
+    throw new SsrfBlockedError(`Crawling internal/private host "${hostname}" is not allowed.`);
+  }
+
+  if (parsed.port && isBlockedPort(parsed.port)) {
+    throw new SsrfBlockedError(`Crawling sensitive port ${parsed.port} is not allowed.`);
   }
 
   if (net.isIP(hostname) && isBlockedIp(hostname)) {
@@ -124,13 +186,15 @@ const globalDnsCache = new Map<string, Promise<{ address: string; family: 4 | 6 
 /**
  * Resolves `hostname` and returns ONE validated public IP address + family,
  * throwing if the hostname is an IP literal in a blocked range, or if every
- * resolved address is blocked (a hostname can resolve to multiple; a site
- * that mixes public and internal addresses is treated as unsafe entirely —
- * we never "pick the safe one and hope").
+ * resolved address is blocked.
  */
 export async function resolvePublicAddress(
   hostname: string
 ): Promise<{ address: string; family: 4 | 6 }> {
+  if (isBlockedHostname(hostname)) {
+    throw new SsrfBlockedError(`Access to internal hostname "${hostname}" is blocked.`);
+  }
+
   if (net.isIP(hostname)) {
     if (isBlockedIp(hostname)) {
       throw new SsrfBlockedError(`IP address ${hostname} is not allowed.`);

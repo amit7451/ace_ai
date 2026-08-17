@@ -14,14 +14,26 @@ import crypto from 'crypto';
 export const ChatController: FastifyPluginAsync = async (fastify) => {
   fastify.post('/', async (request, reply) => {
     const schema = z.object({
-      widgetKey: z.string().optional(),
-      conversationId: z.string().optional(),
-      message: z.string(),
+      widgetKey: z.string().max(128).optional(),
+      conversationId: z.string().max(128).optional(),
+      message: z
+        .string({ required_error: 'Message is required' })
+        .trim()
+        .min(1, 'Message cannot be empty')
+        .max(
+          env.MAX_MESSAGE_CHARACTERS,
+          `Message exceeds the maximum limit of ${env.MAX_MESSAGE_CHARACTERS.toLocaleString()} characters. Please shorten your query and try again.`
+        ),
     });
 
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: 'Invalid input' });
+      const firstErrorMessage = parsed.error.errors[0]?.message || 'Invalid request payload';
+      return reply.status(400).send({
+        success: false,
+        error: firstErrorMessage,
+        details: parsed.error.format(),
+      });
     }
 
     const { widgetKey, message } = parsed.data;

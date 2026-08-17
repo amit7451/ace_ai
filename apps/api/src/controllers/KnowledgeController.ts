@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { knowledgeService } from '../di';
+import { SearchKnowledgeRequestSchema } from '@ion-ai/contracts';
 
 export async function knowledgeController(fastify: FastifyInstance) {
   // All routes here require authentication and organization context
@@ -52,7 +53,12 @@ export async function knowledgeController(fastify: FastifyInstance) {
   });
 
   fastify.post('/search', async (request: FastifyRequest) => {
-    return { success: true, data: { message: 'Search endpoint placeholder registered' } };
+    const { query, topK, scoreThreshold } = SearchKnowledgeRequestSchema.parse(request.body);
+    const result = await knowledgeService.searchKnowledge(request.organization!.id, query, {
+      topK,
+      scoreThreshold,
+    });
+    return { success: true, data: result };
   });
 
   fastify.post('/:id/retry', async (request: FastifyRequest, reply) => {

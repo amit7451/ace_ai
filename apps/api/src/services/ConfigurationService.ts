@@ -2,7 +2,7 @@ import { ConfigurationRepository } from '../repositories/ConfigurationRepository
 import { AuditLogRepository } from '../repositories/AuditLogRepository';
 import { UpdateOrganizationConfigurationRequest } from '@ion-ai/contracts';
 import { Role, hasPermission } from '@ion-ai/auth';
-import { encryptApiKey, decryptApiKey } from '@ion-ai/config';
+import { encryptApiKey, decryptApiKey, env } from '@ion-ai/config';
 
 export class ConfigurationService {
   constructor(
@@ -121,7 +121,7 @@ export class ConfigurationService {
       if (provider === 'testing' || provider === 'gemini') {
         let apiKey = await this.getDecryptedApiKey(organizationId, 'gemini');
         if (!apiKey) {
-          apiKey = process.env.GEMINI_API_KEY || '';
+          apiKey = env.GEMINI_API_KEY || '';
         }
 
         if (apiKey) {
@@ -150,7 +150,7 @@ export class ConfigurationService {
         }
       } else if (provider === 'openai') {
         const apiKey =
-          (await this.getDecryptedApiKey(organizationId, 'openai')) || process.env.OPENAI_API_KEY;
+          (await this.getDecryptedApiKey(organizationId, 'openai')) || env.OPENAI_API_KEY;
         if (apiKey) {
           const res = await fetch('https://api.openai.com/v1/models', {
             headers: { Authorization: `Bearer ${apiKey}` },
@@ -184,8 +184,7 @@ export class ConfigurationService {
         }
       } else if (provider === 'anthropic' && type === 'llm') {
         const apiKey =
-          (await this.getDecryptedApiKey(organizationId, 'anthropic')) ||
-          process.env.ANTHROPIC_API_KEY;
+          (await this.getDecryptedApiKey(organizationId, 'anthropic')) || env.ANTHROPIC_API_KEY;
         if (apiKey) {
           const res = await fetch('https://api.anthropic.com/v1/models', {
             headers: {
@@ -207,8 +206,7 @@ export class ConfigurationService {
           }
         }
       } else if (provider === 'groq' && type === 'llm') {
-        const apiKey =
-          (await this.getDecryptedApiKey(organizationId, 'groq')) || process.env.GROQ_API_KEY;
+        const apiKey = (await this.getDecryptedApiKey(organizationId, 'groq')) || env.GROQ_API_KEY;
         if (apiKey) {
           const res = await fetch('https://api.groq.com/openai/v1/models', {
             headers: { Authorization: `Bearer ${apiKey}` },
@@ -227,8 +225,7 @@ export class ConfigurationService {
         }
       } else if (provider === 'openrouter' && type === 'llm') {
         const apiKey =
-          (await this.getDecryptedApiKey(organizationId, 'openrouter')) ||
-          process.env.OPENROUTER_API_KEY;
+          (await this.getDecryptedApiKey(organizationId, 'openrouter')) || env.OPENROUTER_API_KEY;
         const res = await fetch('https://openrouter.ai/api/v1/models', {
           headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
           signal: AbortSignal.timeout(5000),
@@ -246,7 +243,7 @@ export class ConfigurationService {
         }
       } else if (provider === 'cohere' && type === 'embedding') {
         const apiKey =
-          (await this.getDecryptedApiKey(organizationId, 'cohere')) || process.env.COHERE_API_KEY;
+          (await this.getDecryptedApiKey(organizationId, 'cohere')) || env.COHERE_API_KEY;
         if (apiKey) {
           const res = await fetch('https://api.cohere.com/v1/models?endpoint=embed', {
             headers: { Authorization: `Bearer ${apiKey}` },

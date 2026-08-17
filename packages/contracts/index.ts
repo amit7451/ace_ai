@@ -176,7 +176,47 @@ export const CreateCrawlJobRequestSchema = z.object({
   includePaths: z.array(PathPatternSchema).max(50).optional(),
   excludePaths: z.array(PathPatternSchema).max(50).optional(),
   respectRobotsTxt: z.boolean().optional(),
-  sameOriginOnly: z.boolean().optional(),
+  sameOriginOnly: z
+    .boolean()
+    .refine((val) => val === true, {
+      message:
+        'Cross-origin crawling is disabled for security and cost protection. sameOriginOnly must be true.',
+    })
+    .default(true),
 });
 
 export type CreateCrawlJobRequest = z.infer<typeof CreateCrawlJobRequestSchema>;
+
+// -----------------------------------------
+// Knowledge Search
+// -----------------------------------------
+
+export const SearchKnowledgeRequestSchema = z.object({
+  query: z.string().min(1),
+  topK: z.number().int().min(1).max(50).optional(),
+  scoreThreshold: z.number().min(0).max(1).optional(),
+});
+
+export type SearchKnowledgeRequest = z.infer<typeof SearchKnowledgeRequestSchema>;
+
+export const SearchKnowledgeChunkSchema = z.object({
+  chunkId: z.string(),
+  documentId: z.string().optional(),
+  text: z.string(),
+  score: z.number(),
+  tokenCount: z.number().optional(),
+  sourceType: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export const SearchKnowledgeResponseSchema = z.object({
+  chunks: z.array(SearchKnowledgeChunkSchema),
+  totalCandidateCount: z.number().optional(),
+  returnedChunkCount: z.number().optional(),
+  totalTokenCount: z.number().optional(),
+  durationMs: z.number().optional(),
+  query: z.string(),
+});
+
+export type SearchKnowledgeResponse = z.infer<typeof SearchKnowledgeResponseSchema>;

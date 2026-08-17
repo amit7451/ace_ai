@@ -12,6 +12,7 @@ import { BullMQProvider } from '@ion-ai/queue';
 import { AuthService } from './services/AuthService';
 import { OrganizationService } from './services/OrganizationService';
 import { MemberService } from './services/MemberService';
+import { EmailService } from './services/EmailService';
 import { ConfigurationService } from './services/ConfigurationService';
 import { KnowledgeService } from './services/KnowledgeService';
 import { CrawlerService } from './services/CrawlerService';
@@ -43,6 +44,8 @@ export const queueProvider = new BullMQProvider({
   password: env.REDIS_PASSWORD,
 });
 
+export const emailService = new EmailService();
+
 // Services
 export const organizationService = new OrganizationService(
   organizationRepository,
@@ -51,7 +54,7 @@ export const organizationService = new OrganizationService(
   auditLogRepository
 );
 export const authService = new AuthService(userRepository, organizationService);
-export const memberService = new MemberService(memberRepository, auditLogRepository);
+export const memberService = new MemberService(memberRepository, auditLogRepository, emailService);
 export const configurationService = new ConfigurationService(
   configurationRepository,
   auditLogRepository
