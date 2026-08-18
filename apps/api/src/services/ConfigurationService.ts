@@ -36,6 +36,37 @@ export class ConfigurationService {
       });
     }
 
+    const existingConfig = await this.configRepo.findByOrganizationId(organizationId);
+
+    const embeddingProviderChanged =
+      data.embeddingProvider &&
+      existingConfig &&
+      data.embeddingProvider !== existingConfig.embeddingProvider;
+    const embeddingModelChanged =
+      data.embeddingModel &&
+      existingConfig &&
+      data.embeddingModel !== existingConfig.embeddingModel;
+
+    let reindexRequired = false;
+    let reindexCount = 0;
+    let reindexMessage: string | null = null;
+
+    if (embeddingProviderChanged || embeddingModelChanged) {
+      const { prisma } = await import('@ion-ai/database');
+      reindexCount = await prisma.knowledgeSource.count({
+        where: {
+          organizationId,
+          status: { in: ['COMPLETED', 'FAILED', 'RETRYING'] },
+          document: { isNot: null },
+        },
+      });
+
+      if (reindexCount > 0) {
+        reindexRequired = true;
+        reindexMessage = `Embedding configuration changed. ${reindexCount} existing knowledge document(s) must be reindexed to match the new vector dimensions.`;
+      }
+    }
+
     const config = await this.configRepo.upsert(organizationId, {
       organizationId,
       ...data,
@@ -45,10 +76,19 @@ export class ConfigurationService {
       organizationId,
       action: 'CONFIGURATION_UPDATED',
       actorId,
-      metadata: data,
+      metadata: {
+        ...data,
+        reindexRequired,
+        reindexCount,
+      },
     });
 
-    return config;
+    return {
+      ...config,
+      reindexRequired,
+      reindexCount,
+      reindexMessage,
+    };
   }
 
   async getApiKeys(organizationId: string) {

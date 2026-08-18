@@ -415,4 +415,96 @@ export class KnowledgeService {
 
     return results;
   }
+
+  async reindexAllDocuments(
+    organizationId: string,
+    actorId: string,
+    actorRole: import('@ion-ai/auth').Role
+  ) {
+    const { hasPermission, Role } = await import('@ion-ai/auth');
+    if (!hasPermission(actorRole, Role.ADMIN)) {
+      throw Object.assign(new Error('Insufficient permissions to reindex knowledge'), {
+        statusCode: 403,
+      });
+    }
+
+    const sources = await prisma.knowledgeSource.findMany({
+      where: {
+        organizationId,
+        status: { in: ['COMPLETED', 'FAILED', 'RETRYING'] },
+        document: { isNot: null },
+      },
+      include: {
+        document: true,
+        ingestionJobs: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    if (sources.length === 0) {
+      return { success: true, count: 0, message: 'No knowledge documents found to reindex.' };
+    }
+
+    const docIds = sources.map((s) => s.document!.id);
+
+    // Delete existing chunk records in Postgres
+    await prisma.chunk.deleteMany({
+      where: { documentId: { in: docIds } },
+    });
+
+    for (const source of sources) {
+      const doc = source.document!;
+      let existingJob = source.ingestionJobs[0];
+
+      if (!existingJob) {
+        existingJob = await prisma.ingestionJob.create({
+          data: {
+            knowledgeSourceId: source.id,
+            status: 'PENDING',
+            currentStage: 'UPLOADED',
+            progress: 0,
+          },
+        });
+      } else {
+        await this.queueProvider.removeJob(QueueName.INGESTION, existingJob.id);
+        await this.jobRepo.updateIngestionJob(existingJob.id, {
+          status: 'PENDING',
+          currentStage: 'UPLOADED',
+          progress: 0,
+          failureReason: null,
+          finishedAt: null,
+        });
+      }
+
+      await prisma.knowledgeSource.update({
+        where: { id: source.id },
+        data: { status: 'PENDING' },
+      });
+
+      await this.queueProvider.addJob(
+        QueueName.INGESTION,
+        JobName.UPLOAD,
+        {
+          organizationId,
+          knowledgeSourceId: source.id,
+          documentId: doc.id,
+          storageKey: doc.storageKey,
+          mimeType: doc.mimeType,
+        },
+        { jobId: existingJob.id }
+      );
+    }
+
+    await this.auditLogRepo.create({
+      organizationId,
+      action: 'KNOWLEDGE_REINDEX_ALL',
+      actorId,
+      metadata: { count: sources.length },
+    });
+
+    return {
+      success: true,
+      count: sources.length,
+      message: `Successfully queued ${sources.length} document(s) for reindexing.`,
+    };
+  }
 }

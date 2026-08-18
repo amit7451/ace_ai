@@ -6,7 +6,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 RUN npm install -g turbo@2.10.4
 COPY . .
-RUN turbo prune --scope=@ion-ai/dashboard --docker
+RUN turbo prune @ion-ai/dashboard --docker
 
 # ===================================================
 # Stage 2: Build Next.js Application (Standalone)

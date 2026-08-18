@@ -66,4 +66,13 @@ export async function knowledgeController(fastify: FastifyInstance) {
     await knowledgeService.retryKnowledgeSource(request.organization!.id, id);
     return { success: true };
   });
+
+  fastify.post('/reindex', async (request: FastifyRequest) => {
+    const result = await knowledgeService.reindexAllDocuments(
+      request.organization!.id,
+      request.user.sub,
+      request.memberRole!
+    );
+    return result;
+  });
 }

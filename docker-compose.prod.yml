@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     ports:
       - '80:80'
+      - '443:443'
     depends_on:
       api:
         condition: service_healthy
@@ -16,9 +17,22 @@ services:
         condition: service_healthy
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16.4-alpine3.20
     container_name: ion-ai-postgres
     restart: unless-stopped
     environment:
@@ -32,11 +46,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.1-alpine3.20
     container_name: ion-ai-redis
     restart: unless-stopped
     volumes:
@@ -46,11 +74,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.12.1
     container_name: ion-ai-qdrant
     restart: unless-stopped
     volumes:
@@ -60,8 +102,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4096M
+        reservations:
+          cpus: '0.5'
+          memory: 1024M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   api:
     build:
@@ -90,9 +146,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   worker:
     build:
@@ -117,6 +186,19 @@ services:
         condition: service_healthy
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4096M
+        reservations:
+          cpus: '1.0'
+          memory: 1024M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   dashboard:
     build:
@@ -139,9 +221,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     networks:
       - ion-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '50m'
+        max-file: '5'
 
 volumes:
   postgres_data:
