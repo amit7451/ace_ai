@@ -23,6 +23,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copy pruned source files
 COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL

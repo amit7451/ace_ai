@@ -23,6 +23,7 @@ RUN pnpm install --frozen-lockfile
 
 # Copy pruned source files
 COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
 
 # Generate Prisma Client & Build TypeScript
 RUN pnpm --filter @ion-ai/database db:generate
