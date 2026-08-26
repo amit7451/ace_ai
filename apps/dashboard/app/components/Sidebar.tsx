@@ -73,7 +73,6 @@ export default function Sidebar() {
               width={24}
               height={24}
               priority
-              style={{ width: 'auto', height: 'auto' }}
               className="w-6 h-6 object-contain drop-shadow-[0_0_6px_rgba(255,255,255,0.2)] group-hover:scale-110 transition-transform duration-200"
             />
             <span className="font-bold text-xl tracking-[0.2em] text-zinc-100 uppercase">

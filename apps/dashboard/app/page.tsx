@@ -26,15 +26,14 @@ export default function Home() {
         <main className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 pb-10">
           {/* Logo + Title */}
           <div className="flex flex-col items-center justify-center mb-8 group w-full">
-            <div className="relative mb-5 sm:mb-6">
+            <div className="relative mb-5 sm:mb-6 flex justify-center">
               <Image
                 src="/modbit.webp"
                 alt="ModBit Logo"
-                width={120}
-                height={120}
+                width={96}
+                height={96}
                 priority
-                style={{ width: 'auto', height: 'auto' }}
-                className="relative w-18 sm:w-22 md:w-26 object-contain filter drop-shadow-[0_0_6px_rgba(255,255,255,0.08)] group-hover:scale-105 transition-transform duration-300"
+                className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.12)] group-hover:scale-105 transition-transform duration-300"
               />
             </div>
             {/* pl offset corrects optical centering with letter-spacing */}

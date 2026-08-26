@@ -7,6 +7,7 @@ import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { DeleteOrganizationModal } from '../components/DeleteOrganizationModal';
+import { CreateOrganizationModal } from '../components/CreateOrganizationModal';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ function InstitutionContent() {
   const { user, institutions, loading: authLoading, isAuthenticated, refreshAuth } = useAuth();
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   const router = useRouter();
@@ -42,6 +44,14 @@ function InstitutionContent() {
     router.push('/playground');
   };
 
+  const handleCreateSuccess = async (newOrg: { id: string; name: string; slug?: string }) => {
+    setIsCreateOpen(false);
+    setSuccessMsg(`Institution "${newOrg.name}" created successfully.`);
+    await refreshAuth();
+    localStorage.setItem('organizationId', newOrg.id);
+    router.push('/playground');
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-[#08080a] text-zinc-200 flex items-center justify-center font-mono text-xs tracking-widest animate-pulse">
@@ -53,24 +63,34 @@ function InstitutionContent() {
   return (
     <main className="relative z-10 max-w-3xl w-full mx-auto px-6 pt-32 pb-16 flex-1 flex flex-col justify-center">
       {/* Header */}
-      <div className="mb-8 text-center sm:text-left">
-        <div className="flex items-center justify-center sm:justify-start gap-3">
-          <Image
-            src="/modbit.webp"
-            alt="ModBit Logo"
-            width={36}
-            height={36}
-            priority
-            style={{ width: 'auto', height: 'auto' }}
-            className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]"
-          />
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-[0.2em] text-zinc-100 uppercase">
-            ModBit // INSTITUTION
-          </h1>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/modbit.webp"
+              alt="ModBit Logo"
+              width={36}
+              height={36}
+              priority
+              className="w-9 h-9 object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]"
+            />
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-[0.2em] text-zinc-100 uppercase">
+              ModBit // INSTITUTION
+            </h1>
+          </div>
+          <p className="text-xs text-zinc-400 font-mono tracking-wider mt-2">
+            Select an institution workspace or create a new one
+          </p>
         </div>
-        <p className="text-xs text-zinc-400 font-mono tracking-wider mt-2">
-          Select an institution to open dashboard or manage account
-        </p>
+
+        {institutions.length > 0 && (
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="px-4 py-2.5 modbit-btn-secondary text-xs uppercase tracking-wider font-mono self-start sm:self-auto"
+          >
+            [ + NEW INSTITUTION ]
+          </button>
+        )}
       </div>
 
       {error && (
@@ -132,29 +152,35 @@ function InstitutionContent() {
           </div>
         </div>
       ) : (
-        /* No Attached Institution -> Prompt user to register their institution */
+        /* No Attached Institution -> Prompt user to create their first institution */
         <div className="modbit-card p-8 border border-zinc-800 text-center corner-border space-y-6">
           <div className="space-y-2">
             <h2 className="text-lg font-bold text-zinc-100 tracking-wider">
               No Institution Attached
             </h2>
             <p className="text-xs text-zinc-400 font-mono max-w-md mx-auto leading-relaxed">
-              Your email ({user?.email}) is currently not attached to any institution. Please
-              register your institution first.
+              Your account ({user?.email}) is not currently attached to any active institution
+              workspace. Create an institution below to get started.
             </p>
           </div>
 
           <div>
             <button
-              onClick={() =>
-                router.push(`/signup?no_org=true&email=${encodeURIComponent(user?.email || '')}`)
-              }
+              onClick={() => setIsCreateOpen(true)}
               className="py-3 px-8 modbit-btn-primary text-xs tracking-[0.2em] uppercase"
             >
-              [ REGISTER YOUR INSTITUTION ]
+              [ + CREATE INSTITUTION ]
             </button>
           </div>
         </div>
+      )}
+
+      {isCreateOpen && (
+        <CreateOrganizationModal
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          onSuccess={handleCreateSuccess}
+        />
       )}
 
       {deleteTarget && (

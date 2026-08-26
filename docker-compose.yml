@@ -38,10 +38,11 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ['CMD-SHELL', "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333' || exit 1"]
-      interval: 10s
+      test: ['CMD-SHELL', "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 15s
 
 volumes:
   postgres_data:

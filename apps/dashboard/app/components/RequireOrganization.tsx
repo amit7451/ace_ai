@@ -31,12 +31,11 @@ export default function RequireOrganization({ children }: { children: React.Reac
     }
 
     // Check if the user is attached to this institution
-    if (institutions.length > 0) {
-      const isMember = institutions.some((inst) => inst.id === orgId);
-      if (!isMember) {
-        localStorage.removeItem('organizationId');
-        router.push('/institution?error=unauthorized');
-      }
+    const isMember = institutions.some((inst) => inst.id === orgId);
+    if (!isMember) {
+      localStorage.removeItem('organizationId');
+      router.push('/institution?error=unauthorized');
+      return;
     }
   }, [loading, mounted, isAuthenticated, institutions, router, pathname]);
 
