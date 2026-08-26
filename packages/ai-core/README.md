@@ -1,4 +1,4 @@
-# 🧠 ION AI Core Engine (@ai-chatbot-platform/ai-core)
+# 🧠 ION AI Core Engine (@ion-ai/ai-core)
 
 A production-grade, highly modular, and provider-agnostic AI engine for building multi-tenant SaaS chatbots.
 
@@ -167,12 +167,13 @@ npm run test:coverage
 
 ---
 
-## 🗺️ Roadmap & Next Steps
+## 🗺️ Implementation Status
 
-This package completes the **AI Core Engine**. To build the full production SaaS, the next layers to implement are:
+All originally planned components have been implemented in the Ion AI platform:
 
-1. **Persistent Memory:** Implement a Redis or PostgreSQL `IMemoryProvider`.
-2. **API Server:** Wrap the orchestrator in an Express/Fastify API with REST routes for chat, ingestion, and management.
-3. **Database Layer:** Add PostgreSQL (via Prisma/Drizzle) for multi-tenant data, users, and API keys.
-4. **Authentication:** Implement JWTs, API Key middleware, and RBAC.
-5. **Dashboard & Widget:** Build the frontend management UI and the embeddable chat widget.
+- ✅ **Persistent Memory:** PostgreSQL-backed `PrismaMemoryProvider` in `@ion-ai/chat`
+- ✅ **API Server:** Fastify API with REST routes in `apps/api`
+- ✅ **Database Layer:** PostgreSQL via Prisma with multi-tenant schema in `packages/database`
+- ✅ **Authentication:** JWT auth, encrypted API key storage, RBAC in `packages/auth`
+- ✅ **Dashboard & Widget:** Next.js dashboard (`apps/dashboard`) and embeddable widget SDK (`packages/widget-sdk`)
+- ✅ **Website Crawler:** Production-grade crawler with SSRF protection in `packages/crawler`

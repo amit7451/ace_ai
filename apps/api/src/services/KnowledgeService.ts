@@ -5,7 +5,7 @@ import {
   EmbeddingProviderFactory,
   VectorStoreProviderFactory,
   RagRetriever,
-} from '@ai-chatbot-platform/ai-core';
+} from '@ion-ai/ai-core';
 import { env, decryptApiKey } from '@ion-ai/config';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,6 +19,7 @@ const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
   testing: 'gemini-embedding-001',
   openai: 'text-embedding-3-small',
   cohere: 'embed-english-v3.0',
+  openrouter: 'openai/text-embedding-3-small',
   ollama: 'nomic-embed-text',
 };
 
@@ -374,11 +375,19 @@ export class KnowledgeService {
         apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
       } else if (providerNameRaw === 'gemini') {
         apiKey = env.GEMINI_API_KEY || '';
+      } else if (providerNameRaw === 'openai') {
+        apiKey = env.OPENAI_API_KEY || '';
+      } else if (providerNameRaw === 'cohere') {
+        apiKey = env.COHERE_API_KEY || '';
+      } else if (providerNameRaw === 'openrouter') {
+        apiKey = env.OPENROUTER_API_KEY || '';
       }
 
       if (!apiKey) {
         throw Object.assign(
-          new Error(`API key for embedding provider '${providerNameRaw}' is not configured.`),
+          new Error(
+            `Missing API key for embedding provider '${providerNameRaw}'. Please configure an API key for ${providerNameRaw} in Settings -> Configured API Keys, or switch to Testing Tier.`
+          ),
           { statusCode: 400 }
         );
       }
@@ -431,7 +440,7 @@ export class KnowledgeService {
     const sources = await prisma.knowledgeSource.findMany({
       where: {
         organizationId,
-        status: { in: ['COMPLETED', 'FAILED', 'RETRYING'] },
+        status: { in: ['COMPLETED', 'FAILED'] },
         document: { isNot: null },
       },
       include: {

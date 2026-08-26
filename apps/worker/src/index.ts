@@ -1,23 +1,24 @@
 import { WorkerApplication } from './worker';
+import { logger } from '@ion-ai/logger';
 
 async function bootstrap() {
   const workerApp = new WorkerApplication();
   await workerApp.start();
 
   process.on('SIGTERM', async () => {
-    console.log('SIGTERM received. Shutting down gracefully...');
+    logger.info('SIGTERM received. Shutting down gracefully...');
     await workerApp.stop();
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
-    console.log('SIGINT received. Shutting down gracefully...');
+    logger.info('SIGINT received. Shutting down gracefully...');
     await workerApp.stop();
     process.exit(0);
   });
 }
 
 bootstrap().catch((err) => {
-  console.error('Failed to start worker:', err);
+  logger.error({ err }, 'Failed to start worker');
   process.exit(1);
 });

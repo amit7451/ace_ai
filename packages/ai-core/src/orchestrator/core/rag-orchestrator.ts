@@ -107,14 +107,15 @@ export class RagOrchestrator implements IAIOrchestrator {
       ]);
     } catch (err: any) {
       console.error('[RagOrchestrator] Stream error:', err);
-      if (err instanceof OrchestratorError) {
-        yield { type: 'error', error: err.message };
-      } else {
-        yield {
-          type: 'error',
-          error: err?.message || 'Failed to execute stream orchestration pipeline',
-        };
+      let errorPayload: any = err?.message || 'Failed to execute stream orchestration pipeline';
+      if (typeof err?.toStructuredAIError === 'function') {
+        errorPayload = err.toStructuredAIError();
       }
+      yield {
+        type: 'error',
+        error: typeof errorPayload === 'string' ? errorPayload : errorPayload.message,
+        structuredError: typeof errorPayload === 'object' ? errorPayload : undefined,
+      };
     }
   }
 }

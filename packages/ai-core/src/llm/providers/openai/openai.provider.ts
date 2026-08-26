@@ -49,7 +49,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        throw await mapHttpErrorResponse(response, this.name, this.model);
+        throw await mapHttpErrorResponse(response, this.name, this.model, this.keySource);
       }
 
       const data = (await response.json()) as OpenAIChatCompletionResponse;
@@ -83,7 +83,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       });
 
       if (!res.ok) {
-        throw await mapHttpErrorResponse(res, this.name, this.model);
+        throw await mapHttpErrorResponse(res, this.name, this.model, this.keySource);
       }
       return res;
     });
@@ -91,6 +91,8 @@ export class OpenAIProvider extends BaseLLMProvider {
       throw new LLMInvalidRequestError('OpenAI stream response had no body.', {
         provider: this.name,
         model: this.model,
+        keySource: this.keySource,
+        institutionSupport: this.institutionSupport,
       });
     }
 

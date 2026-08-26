@@ -52,18 +52,22 @@ export class ConfigurationService {
     let reindexMessage: string | null = null;
 
     if (embeddingProviderChanged || embeddingModelChanged) {
-      const { prisma } = await import('@ion-ai/database');
-      reindexCount = await prisma.knowledgeSource.count({
-        where: {
-          organizationId,
-          status: { in: ['COMPLETED', 'FAILED', 'RETRYING'] },
-          document: { isNot: null },
-        },
-      });
+      try {
+        const { prisma } = await import('@ion-ai/database');
+        reindexCount = await prisma.knowledgeSource.count({
+          where: {
+            organizationId,
+            status: { in: ['COMPLETED', 'FAILED'] },
+            document: { isNot: null },
+          },
+        });
 
-      if (reindexCount > 0) {
-        reindexRequired = true;
-        reindexMessage = `Embedding configuration changed. ${reindexCount} existing knowledge document(s) must be reindexed to match the new vector dimensions.`;
+        if (reindexCount > 0) {
+          reindexRequired = true;
+          reindexMessage = `Embedding configuration changed. ${reindexCount} existing knowledge document(s) must be reindexed to match the new vector dimensions.`;
+        }
+      } catch (err) {
+        // Non-blocking reindex check fallback
       }
     }
 
@@ -126,7 +130,77 @@ export class ConfigurationService {
       actorId,
       metadata: { provider },
     });
-    return { success: true };
+
+    // Auto-shift active defaults:
+    // Case 2 & 3: Immediately activate this provider as default chat / embedding provider
+    let config = await this.configRepo.findByOrganizationId(organizationId);
+    if (!config) {
+      config = await this.configRepo.upsert(organizationId, {
+        organizationId,
+        llmProvider: 'testing',
+        embeddingProvider: 'testing',
+        temperature: 0.7,
+      });
+    }
+
+    const allKeys = await this.configRepo.findApiKeysByOrganizationId(organizationId);
+    const configuredKeys = new Set(allKeys.map((k) => k.provider));
+    configuredKeys.add(provider);
+
+    let updatedLlmProvider = config.llmProvider;
+    let updatedLlmModel = config.llmModel;
+    let updatedEmbeddingProvider = config.embeddingProvider;
+    let updatedEmbeddingModel = config.embeddingModel;
+
+    // 1. Shift Chat Provider to the newly added key if it supports LLM
+    if (LLM_PROVIDERS.includes(provider)) {
+      updatedLlmProvider = provider;
+      updatedLlmModel =
+        DEFAULT_LLM_MODELS[provider] || FALLBACK_MODELS[provider]?.llm?.[0]?.id || '';
+    }
+
+    // 2. Shift Embedding Provider:
+    // If the newly added key supports embeddings, shift to it
+    if (EMBEDDING_PROVIDERS.includes(provider)) {
+      updatedEmbeddingProvider = provider;
+      updatedEmbeddingModel =
+        DEFAULT_EMBEDDING_MODELS[provider] || FALLBACK_MODELS[provider]?.embedding?.[0]?.id || '';
+    } else {
+      // If the new key does NOT support embeddings (e.g. Anthropic, Groq),
+      // check if another configured key supports embeddings
+      const otherEmbeddingProvider = EMBEDDING_PROVIDERS.find((p) => configuredKeys.has(p));
+      if (otherEmbeddingProvider) {
+        if (
+          updatedEmbeddingProvider === 'testing' ||
+          !configuredKeys.has(updatedEmbeddingProvider)
+        ) {
+          updatedEmbeddingProvider = otherEmbeddingProvider;
+          updatedEmbeddingModel =
+            DEFAULT_EMBEDDING_MODELS[otherEmbeddingProvider] ||
+            FALLBACK_MODELS[otherEmbeddingProvider]?.embedding?.[0]?.id ||
+            '';
+        }
+      }
+    }
+
+    const updatedConfig = await this.configRepo.upsert(organizationId, {
+      organizationId,
+      llmProvider: updatedLlmProvider,
+      llmModel: updatedLlmModel,
+      embeddingProvider: updatedEmbeddingProvider,
+      embeddingModel: updatedEmbeddingModel,
+    });
+
+    return {
+      success: true,
+      data: {
+        shiftedLlmProvider: updatedLlmProvider,
+        shiftedLlmModel: updatedLlmModel,
+        shiftedEmbeddingProvider: updatedEmbeddingProvider,
+        shiftedEmbeddingModel: updatedEmbeddingModel,
+        config: updatedConfig,
+      },
+    };
   }
 
   async deleteApiKey(organizationId: string, actorId: string, actorRole: Role, provider: string) {
@@ -142,6 +216,58 @@ export class ConfigurationService {
       actorId,
       metadata: { provider },
     });
+
+    // Check if the deleted key was active in llmProvider or embeddingProvider
+    const config = await this.configRepo.findByOrganizationId(organizationId);
+    if (config) {
+      const remainingKeys = await this.configRepo.findApiKeysByOrganizationId(organizationId);
+      const configuredKeys = new Set(remainingKeys.map((k) => k.provider));
+
+      let needsUpdate = false;
+      let fallbackLlm = config.llmProvider;
+      let fallbackLlmModel = config.llmModel;
+      let fallbackEmbedding = config.embeddingProvider;
+      let fallbackEmbeddingModel = config.embeddingModel;
+
+      if (config.llmProvider === provider) {
+        needsUpdate = true;
+        const anotherLlmKey = LLM_PROVIDERS.find((p) => configuredKeys.has(p));
+        if (anotherLlmKey) {
+          fallbackLlm = anotherLlmKey;
+          fallbackLlmModel =
+            DEFAULT_LLM_MODELS[anotherLlmKey] || FALLBACK_MODELS[anotherLlmKey]?.llm?.[0]?.id || '';
+        } else {
+          fallbackLlm = 'testing';
+          fallbackLlmModel = DEFAULT_LLM_MODELS['testing'];
+        }
+      }
+
+      if (config.embeddingProvider === provider) {
+        needsUpdate = true;
+        const anotherEmbeddingKey = EMBEDDING_PROVIDERS.find((p) => configuredKeys.has(p));
+        if (anotherEmbeddingKey) {
+          fallbackEmbedding = anotherEmbeddingKey;
+          fallbackEmbeddingModel =
+            DEFAULT_EMBEDDING_MODELS[anotherEmbeddingKey] ||
+            FALLBACK_MODELS[anotherEmbeddingKey]?.embedding?.[0]?.id ||
+            '';
+        } else {
+          fallbackEmbedding = 'testing';
+          fallbackEmbeddingModel = DEFAULT_EMBEDDING_MODELS['testing'];
+        }
+      }
+
+      if (needsUpdate) {
+        await this.configRepo.upsert(organizationId, {
+          organizationId,
+          llmProvider: fallbackLlm,
+          llmModel: fallbackLlmModel,
+          embeddingProvider: fallbackEmbedding,
+          embeddingModel: fallbackEmbeddingModel,
+        });
+      }
+    }
+
     return { success: true };
   }
 
@@ -263,7 +389,7 @@ export class ConfigurationService {
             }
           }
         }
-      } else if (provider === 'openrouter' && type === 'llm') {
+      } else if (provider === 'openrouter') {
         const apiKey =
           (await this.getDecryptedApiKey(organizationId, 'openrouter')) || env.OPENROUTER_API_KEY;
         const res = await fetch('https://openrouter.ai/api/v1/models', {
@@ -273,10 +399,25 @@ export class ConfigurationService {
         if (res.ok) {
           const data: any = await res.json();
           const rawModels: any[] = data.data || [];
-          const filtered = rawModels.slice(0, 50).map((m) => ({
-            id: m.id,
-            name: m.name ? `${m.name} (${m.id})` : m.id,
-          }));
+          let filtered: any[] = [];
+          if (type === 'embedding') {
+            filtered = rawModels
+              .filter(
+                (m) =>
+                  m.id.toLowerCase().includes('embed') ||
+                  m.id.toLowerCase().includes('bge') ||
+                  m.name?.toLowerCase().includes('embed')
+              )
+              .map((m) => ({
+                id: m.id,
+                name: m.name ? `${m.name} (${m.id})` : m.id,
+              }));
+          } else {
+            filtered = rawModels.slice(0, 50).map((m) => ({
+              id: m.id,
+              name: m.name ? `${m.name} (${m.id})` : m.id,
+            }));
+          }
           if (filtered.length > 0) {
             return { provider, type, models: filtered, live: true };
           }
@@ -319,20 +460,43 @@ export class ConfigurationService {
   }
 }
 
+const LLM_PROVIDERS = ['gemini', 'openai', 'anthropic', 'groq', 'openrouter', 'ollama'];
+const EMBEDDING_PROVIDERS = ['gemini', 'openai', 'cohere', 'openrouter', 'ollama'];
+
+const DEFAULT_LLM_MODELS: Record<string, string> = {
+  testing: 'gemini-2.5-flash',
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-3-5-sonnet-20241022',
+  groq: 'llama-3.3-70b-versatile',
+  openrouter: 'meta-llama/llama-3.3-70b-instruct',
+  ollama: 'llama3.2',
+};
+
+const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
+  testing: 'gemini-embedding-001',
+  gemini: 'gemini-embedding-001',
+  openai: 'text-embedding-3-small',
+  cohere: 'embed-english-v3.0',
+  openrouter: 'openai/text-embedding-3-small',
+  ollama: 'nomic-embed-text',
+};
+
 const FALLBACK_MODELS: Record<
   string,
   { llm: Array<{ id: string; name: string }>; embedding: Array<{ id: string; name: string }> }
 > = {
   gemini: {
     llm: [
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Recommended)' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
       { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
       { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
     ],
     embedding: [
-      { id: 'gemini-embedding-001', name: 'Gemini Embedding 001' },
-      { id: 'gemini-embedding-2-preview', name: 'Gemini Embedding 2 Preview' },
-      { id: 'gemini-embedding-2', name: 'Gemini Embedding 2' },
+      { id: 'gemini-embedding-001', name: 'Gemini Embedding 001 (768d - Recommended)' },
+      { id: 'text-embedding-004', name: 'Text Embedding 004 (768d)' },
+      { id: 'gemini-embedding-2-preview', name: 'Gemini Embedding 2 Preview (768d)' },
     ],
   },
   openai: {
@@ -376,11 +540,23 @@ const FALLBACK_MODELS: Record<
       { id: 'anthropic/claude-3.5-sonnet', name: 'Anthropic Claude 3.5 Sonnet' },
       { id: 'google/gemini-2.0-flash-exp:free', name: 'Google Gemini 2.0 Flash (Free)' },
       { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
+      { id: 'mistralai/mistral-large-2407', name: 'Mistral Large 2407' },
     ],
-    embedding: [],
+    embedding: [
+      {
+        id: 'openai/text-embedding-3-small',
+        name: 'OpenAI text-embedding-3-small (1536d - Recommended)',
+      },
+      { id: 'openai/text-embedding-3-large', name: 'OpenAI text-embedding-3-large (3072d)' },
+      { id: 'openai/text-embedding-ada-002', name: 'OpenAI text-embedding-ada-002 (1536d)' },
+    ],
   },
   cohere: {
-    llm: [],
+    llm: [
+      { id: 'command-r-plus', name: 'Command R+ (Recommended)' },
+      { id: 'command-r', name: 'Command R' },
+      { id: 'command-light', name: 'Command Light' },
+    ],
     embedding: [
       { id: 'embed-english-v3.0', name: 'embed-english-v3.0 (1024d - Recommended)' },
       { id: 'embed-multilingual-v3.0', name: 'embed-multilingual-v3.0 (1024d)' },
@@ -405,9 +581,15 @@ const FALLBACK_MODELS: Record<
   },
   testing: {
     llm: [
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Global Env)' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Global Env - Recommended)' },
       { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Global Env)' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Global Env)' },
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Global Env)' },
     ],
-    embedding: [{ id: 'gemini-embedding-001', name: 'Gemini Embedding 001 (Global Env - 768d)' }],
+    embedding: [
+      { id: 'gemini-embedding-001', name: 'Gemini Embedding 001 (Global Env - 768d - Default)' },
+      { id: 'text-embedding-004', name: 'Text Embedding 004 (Global Env - 768d)' },
+      { id: 'gemini-embedding-2-preview', name: 'Gemini Embedding 2 Preview (Global Env - 768d)' },
+    ],
   },
 };

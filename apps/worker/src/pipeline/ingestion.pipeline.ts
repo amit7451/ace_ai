@@ -7,7 +7,7 @@ import {
   KnowledgeProcessor,
   EmbeddingProviderFactory,
   VectorStoreProviderFactory,
-} from '@ai-chatbot-platform/ai-core';
+} from '@ion-ai/ai-core';
 import { UploadJobPayload } from '@ion-ai/queue';
 import { env } from '@ion-ai/config';
 
@@ -159,9 +159,21 @@ export class IngestionPipeline {
       const attemptsMade = (bullmqJob?.attemptsMade ?? 0) + 1;
       const isFinalAttempt = attemptsMade >= maxAttempts;
 
+      const rawMsg = error?.message || String(error || 'Ingestion failed');
+      let cleanMsg = rawMsg;
+      try {
+        if (typeof rawMsg === 'string' && rawMsg.includes('{') && rawMsg.includes('}')) {
+          const start = rawMsg.indexOf('{');
+          const end = rawMsg.lastIndexOf('}') + 1;
+          const jsonStr = rawMsg.slice(start, end);
+          const parsed = JSON.parse(jsonStr);
+          cleanMsg = parsed.error?.message || parsed.message || parsed.error || rawMsg;
+        }
+      } catch (_) {}
+
       if (!isFinalAttempt) {
         logger.warn(
-          { documentId: job.documentId, attemptsMade, maxAttempts, error: error.message },
+          { documentId: job.documentId, attemptsMade, maxAttempts, error: cleanMsg },
           'Ingestion job attempt failed; marking RETRYING for queue backoff'
         );
         await prisma.ingestionJob.updateMany({
@@ -169,7 +181,7 @@ export class IngestionPipeline {
           data: {
             status: 'RETRYING',
             retryCount: attemptsMade,
-            failureReason: `Attempt ${attemptsMade}/${maxAttempts} failed: ${error.message}`,
+            failureReason: `Attempt ${attemptsMade}/${maxAttempts} failed: ${cleanMsg}`,
           },
         });
         await prisma.knowledgeSource.update({
@@ -178,7 +190,7 @@ export class IngestionPipeline {
         });
       } else {
         logger.error(
-          { documentId: job.documentId, attemptsMade, maxAttempts, error: error.message },
+          { documentId: job.documentId, attemptsMade, maxAttempts, error: cleanMsg },
           'Ingestion job exhausted all retry attempts; marking FAILED'
         );
         await prisma.ingestionJob.updateMany({
@@ -186,7 +198,7 @@ export class IngestionPipeline {
           data: {
             status: 'FAILED',
             retryCount: attemptsMade,
-            failureReason: `All ${maxAttempts} attempts failed. Last error: ${error.message}`,
+            failureReason: cleanMsg,
             finishedAt: new Date(),
           },
         });

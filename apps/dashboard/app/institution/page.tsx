@@ -6,14 +6,14 @@ import Image from 'next/image';
 import Dotfield from '../components/Dotfield';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../lib/api';
+import { DeleteOrganizationModal } from '../components/DeleteOrganizationModal';
 
 export const dynamic = 'force-dynamic';
 
 function InstitutionContent() {
   const { user, institutions, loading: authLoading, isAuthenticated, refreshAuth } = useAuth();
   const [error, setError] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
 
   const router = useRouter();
@@ -40,59 +40,6 @@ function InstitutionContent() {
     }
     localStorage.setItem('organizationId', id);
     router.push('/playground');
-  };
-
-  const handleDeleteInstitution = async (id: string, name: string) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to permanently delete "${name}"?\n\nThis will permanently remove this institution and all associated data from the PostgreSQL database. This action CANNOT be undone.`
-    );
-    if (!confirmed) return;
-
-    setDeletingId(id);
-    setError('');
-    setSuccessMsg('');
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'x-organization-id': id,
-        },
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || 'Failed to delete institution account');
-      }
-
-      // If deleted institution was current selected org, clear it
-      const currentOrgId = localStorage.getItem('organizationId');
-      if (currentOrgId === id) {
-        localStorage.removeItem('organizationId');
-      }
-
-      setSuccessMsg(`Institution "${name}" deleted successfully from database.`);
-      await refreshAuth();
-    } catch (err: any) {
-      // Prototype fallback
-      const saved = localStorage.getItem('user_institutions');
-      if (saved) {
-        const filtered = JSON.parse(saved).filter((i: any) => i.id !== id);
-        localStorage.setItem('user_institutions', JSON.stringify(filtered));
-        const currentOrgId = localStorage.getItem('organizationId');
-        if (currentOrgId === id) {
-          localStorage.removeItem('organizationId');
-        }
-        await refreshAuth();
-        setSuccessMsg(`Institution "${name}" deleted successfully.`);
-      } else {
-        setError(err.message || 'Deletion failed');
-      }
-    } finally {
-      setDeletingId(null);
-    }
   };
 
   if (authLoading) {
@@ -169,6 +116,16 @@ function InstitutionContent() {
                   >
                     [ OPEN DASHBOARD ]
                   </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ id: inst.id, name: inst.name });
+                    }}
+                    className="px-3.5 py-2 text-xs font-mono tracking-wider text-red-400 hover:text-red-300 border border-red-900/60 hover:border-red-700 bg-red-950/20 hover:bg-red-950/60 transition-colors uppercase"
+                    title="Delete institution workspace"
+                  >
+                    [ DELETE ]
+                  </button>
                 </div>
               </div>
             ))}
@@ -198,6 +155,21 @@ function InstitutionContent() {
             </button>
           </div>
         </div>
+      )}
+
+      {deleteTarget && (
+        <DeleteOrganizationModal
+          isOpen={Boolean(deleteTarget)}
+          organizationId={deleteTarget.id}
+          organizationName={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onSuccess={async () => {
+            const deletedName = deleteTarget.name;
+            setDeleteTarget(null);
+            setSuccessMsg(`Institution "${deletedName}" deleted successfully.`);
+            await refreshAuth();
+          }}
+        />
       )}
     </main>
   );

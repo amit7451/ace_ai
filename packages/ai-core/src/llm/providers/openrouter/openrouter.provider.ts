@@ -14,6 +14,14 @@ export class OpenRouterProvider extends OpenAIProvider {
   readonly name: string = 'openrouter';
 
   constructor(config: LLMProviderConfig) {
-    super({ ...config, baseUrl: config.baseUrl ?? DEFAULT_BASE_URL });
+    super({
+      ...config,
+      baseUrl: config.baseUrl ?? DEFAULT_BASE_URL,
+      extraHeaders: {
+        'HTTP-Referer': 'https://modbit.ai',
+        'X-Title': 'ModBit AI Platform',
+        ...(config.extraHeaders ?? {}),
+      },
+    });
   }
 }

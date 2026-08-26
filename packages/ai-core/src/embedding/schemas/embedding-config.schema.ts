@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-export const EMBEDDING_PROVIDER_NAMES = ['openai', 'gemini', 'cohere', 'ollama'] as const;
+export const EMBEDDING_PROVIDER_NAMES = [
+  'openai',
+  'gemini',
+  'cohere',
+  'openrouter',
+  'ollama',
+] as const;
 export const EMBEDDING_INPUT_TYPES = ['document', 'query', 'clustering', 'classification'] as const;
 
 export const embeddingConfigSchema = z

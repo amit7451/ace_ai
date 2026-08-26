@@ -90,7 +90,7 @@ export class OrganizationService {
       throw Object.assign(new Error('Organization not found'), { statusCode: 404 });
     }
 
-    if (!confirmationName || confirmationName !== org.name) {
+    if (!confirmationName || confirmationName.trim() !== org.name.trim()) {
       throw Object.assign(
         new Error('Confirmation required: provide the organization name to confirm deletion.'),
         { statusCode: 400 }

@@ -148,7 +148,7 @@ export class GeminiProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        throw await mapHttpErrorResponse(response, this.name, targetModel);
+        throw await mapHttpErrorResponse(response, this.name, targetModel, this.keySource);
       }
 
       const data = (await response.json()) as GeminiGenerateContentResponse;
@@ -208,7 +208,7 @@ export class GeminiProvider extends BaseLLMProvider {
         });
 
         if (!res.ok) {
-          throw await mapHttpErrorResponse(res, this.name, targetModel);
+          throw await mapHttpErrorResponse(res, this.name, targetModel, this.keySource);
         }
         return res;
       });
@@ -229,7 +229,7 @@ export class GeminiProvider extends BaseLLMProvider {
             });
 
             if (!res.ok) {
-              throw await mapHttpErrorResponse(res, this.name, fallbackModel);
+              throw await mapHttpErrorResponse(res, this.name, fallbackModel, this.keySource);
             }
             return res;
           });
@@ -245,6 +245,8 @@ export class GeminiProvider extends BaseLLMProvider {
       throw new LLMInvalidRequestError('Gemini stream response had no body.', {
         provider: this.name,
         model: targetModel,
+        keySource: this.keySource,
+        institutionSupport: this.institutionSupport,
       });
     }
 

@@ -29,7 +29,7 @@ export default function JobsPage() {
             setIsQueuePaused(data.isPaused ?? false);
             setLoading(false);
           } else if (data.type === 'connected') {
-            console.log('SSE Connected');
+            // SSE connection established
           }
         } catch (e) {
           console.error('Failed to parse SSE message', e);

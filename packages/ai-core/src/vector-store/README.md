@@ -109,7 +109,7 @@ and 5 don't each invent their own metadata schema.
 ## Usage
 
 ```typescript
-import { VectorStoreProviderFactory } from '@ai-chatbot-platform/ai-core';
+import { VectorStoreProviderFactory } from '@ion-ai/ai-core';
 
 const store = VectorStoreProviderFactory.create({
   provider: 'qdrant',

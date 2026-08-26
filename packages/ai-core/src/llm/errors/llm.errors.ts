@@ -247,6 +247,76 @@ export class LLMError extends Error {
       };
     }
 
+    if (this.code === 'INVALID_REQUEST_ERROR') {
+      let cleanMsg = this.message;
+      let title = 'Invalid Request / Model Error';
+      let description = this.message;
+      let actionUrl = '/settings';
+      let primaryBtnLabel = 'Change Model / Settings';
+      let secBtnLabel: string | undefined = 'Dismiss';
+      let secBtnUrl: string | undefined = undefined;
+
+      try {
+        if (cleanMsg.startsWith('{')) {
+          const parsed = JSON.parse(cleanMsg);
+          cleanMsg = parsed.error?.message || parsed.message || cleanMsg;
+        }
+      } catch (_) {}
+
+      const lowerMsg = cleanMsg.toLowerCase();
+      if (
+        lowerMsg.includes('privacy') ||
+        lowerMsg.includes('guardrail') ||
+        lowerMsg.includes('data policy')
+      ) {
+        title = 'Provider Privacy / Guardrail Policy Restriction';
+        description =
+          cleanMsg ||
+          `The selected model (${this.model || this.provider}) is restricted by your provider privacy or guardrail settings. Please adjust your account privacy policy or choose another model.`;
+        if (this.provider === 'openrouter') {
+          secBtnLabel = 'OpenRouter Privacy Settings';
+          secBtnUrl = 'https://openrouter.ai/settings/privacy';
+        }
+      } else if (
+        this.statusCode === 404 ||
+        lowerMsg.includes('not found') ||
+        lowerMsg.includes('does not exist') ||
+        lowerMsg.includes('no endpoints available')
+      ) {
+        title = 'Model Not Found / Unavailable';
+        description = `The selected model "${this.model || this.provider}" is unavailable or not supported by provider "${this.provider}". Please choose an active model in Settings.`;
+      }
+
+      return {
+        code: 'INVALID_REQUEST',
+        category: 'UNKNOWN',
+        message: cleanMsg,
+        keySource: activeKeySource,
+        provider: this.provider,
+        institutionSupport: support,
+        actionableResolution: {
+          type: 'NAVIGATE_TO_SETTINGS',
+          title,
+          description,
+          primaryButton: {
+            label: primaryBtnLabel,
+            action: 'NAVIGATE_TO_SETTINGS',
+            targetUrl: actionUrl,
+          },
+          secondaryButton: secBtnUrl
+            ? {
+                label: secBtnLabel || 'Provider Settings',
+                action: 'UPGRADE_PROVIDER_PLAN',
+                targetUrl: secBtnUrl,
+              }
+            : {
+                label: 'Dismiss',
+                action: 'DISMISS',
+              },
+        },
+      };
+    }
+
     if (this.code === 'PROVIDER_UNAVAILABLE_ERROR') {
       return {
         code: 'PROVIDER_DOWN',
@@ -268,17 +338,25 @@ export class LLMError extends Error {
       };
     }
 
+    let cleanUnknownMsg = this.message || 'An unexpected AI model error occurred.';
+    try {
+      if (cleanUnknownMsg.startsWith('{')) {
+        const parsed = JSON.parse(cleanUnknownMsg);
+        cleanUnknownMsg = parsed.error?.message || parsed.message || cleanUnknownMsg;
+      }
+    } catch (_) {}
+
     return {
       code: 'UNKNOWN_AI_ERROR',
       category: 'UNKNOWN',
-      message: this.message || 'An unexpected AI model error occurred.',
+      message: cleanUnknownMsg,
       keySource: activeKeySource,
       provider: this.provider,
       institutionSupport: support,
       actionableResolution: {
         type: 'RETRY_NOW',
         title: 'Unexpected Error',
-        description: this.message || 'An unexpected error occurred during request execution.',
+        description: cleanUnknownMsg,
         primaryButton: {
           label: 'Retry',
           action: 'RETRY_NOW',
@@ -320,25 +398,25 @@ export class LLMInvalidRequestError extends LLMError {
   }
 }
 
-export class LLMProviderUnavailableError extends LLMError {
-  constructor(context: LLMErrorContext) {
-    super(
-      `Provider "${context.provider}" is currently unavailable. Please retry shortly.`,
-      'PROVIDER_UNAVAILABLE_ERROR',
-      context
-    );
-    this.name = 'LLMProviderUnavailableError';
-  }
-}
-
 export class LLMContextLengthError extends LLMError {
   constructor(context: LLMErrorContext) {
     super(
-      `Request to provider "${context.provider}" exceeded the model's maximum context length.`,
+      `Maximum context length exceeded for model "${context.model || context.provider}".`,
       'CONTEXT_LENGTH_ERROR',
       context
     );
     this.name = 'LLMContextLengthError';
+  }
+}
+
+export class LLMProviderUnavailableError extends LLMError {
+  constructor(context: LLMErrorContext) {
+    super(
+      `Provider "${context.provider}" is temporarily unavailable.`,
+      'PROVIDER_UNAVAILABLE_ERROR',
+      context
+    );
+    this.name = 'LLMProviderUnavailableError';
   }
 }
 
@@ -357,6 +435,14 @@ export function mapHttpStatusToError(
   keySource?: KeySourceType,
   retryAfterMs?: number
 ): LLMError {
+  let cleanMessage = message;
+  try {
+    if (cleanMessage.startsWith('{')) {
+      const parsed = JSON.parse(cleanMessage);
+      cleanMessage = parsed.error?.message || parsed.message || cleanMessage;
+    }
+  } catch (_) {}
+
   const ctx: LLMErrorContext = { provider, model, statusCode: status, keySource, retryAfterMs };
 
   switch (status) {
@@ -371,14 +457,14 @@ export function mapHttpStatusToError(
     case 404:
     case 422:
       if (
-        message.includes('context') ||
-        message.includes('maximum context length') ||
-        message.includes('token count')
+        cleanMessage.includes('context') ||
+        cleanMessage.includes('maximum context length') ||
+        cleanMessage.includes('token count')
       ) {
         return new LLMContextLengthError(ctx);
       }
       return new LLMInvalidRequestError(
-        message || `Invalid request sent to provider "${provider}".`,
+        cleanMessage || `Invalid request sent to provider "${provider}".`,
         ctx
       );
     case 500:
@@ -387,7 +473,10 @@ export function mapHttpStatusToError(
     case 504:
       return new LLMProviderUnavailableError(ctx);
     default:
-      return new LLMUnknownError(message || `Unexpected error from provider "${provider}".`, ctx);
+      return new LLMUnknownError(
+        cleanMessage || `Unexpected error from provider "${provider}".`,
+        ctx
+      );
   }
 }
 

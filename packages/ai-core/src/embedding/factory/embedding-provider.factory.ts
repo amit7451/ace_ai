@@ -20,6 +20,11 @@ export class EmbeddingProviderFactory {
     switch (parsed.provider) {
       case 'openai':
         return new OpenAIEmbeddingProvider(parsed);
+      case 'openrouter':
+        return new OpenAIEmbeddingProvider({
+          ...parsed,
+          baseUrl: parsed.baseUrl || 'https://openrouter.ai/api/v1',
+        });
       case 'gemini':
         return new GeminiEmbeddingProvider(parsed);
       case 'cohere':

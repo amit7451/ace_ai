@@ -1,4 +1,5 @@
 import { chatRepository } from '../repositories/ChatRepository';
+import { logger } from '@ion-ai/logger';
 import {
   RagOrchestrator,
   LLMProviderFactory,
@@ -8,7 +9,7 @@ import {
   RagPromptBuilder,
   ChatStreamChunk,
   LLMError,
-} from '@ai-chatbot-platform/ai-core';
+} from '@ion-ai/ai-core';
 import { PrismaMemoryProvider } from './PrismaMemoryProvider';
 import { rateLimitService } from './RateLimitService';
 import { env } from '@ion-ai/config';
@@ -29,6 +30,7 @@ const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
   testing: 'gemini-embedding-001',
   openai: 'text-embedding-3-small',
   cohere: 'embed-english-v3.0',
+  openrouter: 'openai/text-embedding-3-small',
   ollama: 'nomic-embed-text',
 };
 
@@ -39,6 +41,14 @@ export class ChatService {
     if (!orgConfig) {
       throw new Error('Organization configuration not found');
     }
+
+    const institutionSupport: InstitutionSupportInfo = {
+      institutionName: orgConfig.institutionName || undefined,
+      supportEmail: orgConfig.supportEmail || undefined,
+      supportWebsite: orgConfig.supportWebsite || undefined,
+      supportPhone: orgConfig.supportPhone || undefined,
+      introductoryMessage: orgConfig.introductoryMessage || undefined,
+    };
 
     const llmProviderRaw = (orgConfig.llmProvider || 'testing') as string;
     let llmApiKey: string = '';
@@ -93,7 +103,15 @@ export class ChatService {
       }
 
       if (!llmApiKey) {
-        throw new Error(`API key for provider '${llmProviderRaw}' is not configured.`);
+        throw new LLMError(
+          `API key for provider '${llmProviderRaw}' is not configured. Please add an API key in Settings -> Configured API Keys or switch to Testing Tier.`,
+          'AUTHENTICATION_ERROR',
+          {
+            provider: llmProviderRaw,
+            keySource,
+            institutionSupport,
+          }
+        );
       }
     }
 
@@ -106,7 +124,7 @@ export class ChatService {
           )
         : (orgConfig.maxTokens ?? undefined);
 
-    console.log(
+    logger.info(
       `[ChatService] Initializing LLM: provider=${llmProviderName}, model=${llmModel}, keySource=${keySource}, maxTokens=${resolvedMaxTokens}`
     );
 
@@ -116,6 +134,8 @@ export class ChatService {
       model: llmModel,
       temperature: orgConfig.temperature ?? 0.7,
       maxTokens: resolvedMaxTokens,
+      keySource,
+      institutionSupport,
     });
 
     const embedderProviderRaw = (orgConfig.embeddingProvider || 'testing') as string;
@@ -157,16 +177,28 @@ export class ChatService {
         embedderApiKey = decryptApiKey(apiKeyRecord.encryptedKey);
       } else if (embedderProviderRaw === 'gemini') {
         embedderApiKey = env.GEMINI_API_KEY || '';
+      } else if (embedderProviderRaw === 'openai') {
+        embedderApiKey = env.OPENAI_API_KEY || '';
+      } else if (embedderProviderRaw === 'cohere') {
+        embedderApiKey = env.COHERE_API_KEY || '';
+      } else if (embedderProviderRaw === 'openrouter') {
+        embedderApiKey = env.OPENROUTER_API_KEY || '';
       }
 
       if (!embedderApiKey) {
-        throw new Error(
-          `API key for embedding provider '${embedderProviderRaw}' is not configured.`
+        throw new LLMError(
+          `Missing API key for embedding provider '${embedderProviderRaw}'. Please add an API key for ${embedderProviderRaw} in Settings -> Configured API Keys, or switch to Testing Tier.`,
+          'AUTHENTICATION_ERROR',
+          {
+            provider: embedderProviderRaw,
+            keySource: 'ORGANIZATION_CUSTOM_KEY',
+            institutionSupport,
+          }
         );
       }
     }
 
-    console.log(
+    logger.info(
       `[ChatService] Initializing Embedder: provider=${embedderProviderName}, model=${embedderModel}`
     );
 
@@ -207,14 +239,6 @@ Your ONLY allowed actions are:
 2. If the user is just saying a basic greeting (like hello, hi, hey), respond normally.
 3. OTHERWISE, you MUST politely decline to answer and state that you do not have the provided context to answer.`,
     });
-
-    const institutionSupport: InstitutionSupportInfo = {
-      institutionName: orgConfig.institutionName || undefined,
-      supportEmail: orgConfig.supportEmail || undefined,
-      supportWebsite: orgConfig.supportWebsite || undefined,
-      supportPhone: orgConfig.supportPhone || undefined,
-      introductoryMessage: orgConfig.introductoryMessage || undefined,
-    };
 
     return {
       orchestrator: new RagOrchestrator(retriever, memory, promptBuilder, llm),

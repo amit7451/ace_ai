@@ -6,7 +6,7 @@ import {
   KnowledgeProcessor,
   EmbeddingProviderFactory,
   VectorStoreProviderFactory,
-} from '@ai-chatbot-platform/ai-core';
+} from '@ion-ai/ai-core';
 import { WebsiteCrawler, CrawledPageResult, CrawlConfig, BrowserRenderer } from '@ion-ai/crawler';
 import { CrawlJobPayload } from '@ion-ai/queue';
 import { resolveEmbeddingProvider } from '../lib/resolve-embedding-provider';
@@ -221,7 +221,7 @@ export class CrawlerPipeline {
         await this.bumpCounts(job.crawlJobId);
       } catch (err: any) {
         if (err.name === 'KnowledgeEmptyContentError') {
-          console.log(
+          logger.info(
             `[crawl ${job.crawlJobId}] ${page.url} yielded no chunks (empty content after parsing); marking SKIPPED.`
           );
           await this.upsertPage(
@@ -298,9 +298,9 @@ export class CrawlerPipeline {
         isCancelled,
         onLog: (level, message) => {
           const line = `[crawl ${job.crawlJobId}] ${message}`;
-          if (level === 'error') console.error(line);
-          else if (level === 'warn') console.warn(line);
-          else console.log(line);
+          if (level === 'error') logger.error(line);
+          else if (level === 'warn') logger.warn(line);
+          else logger.info(line);
         },
       });
 
@@ -313,9 +313,9 @@ export class CrawlerPipeline {
         },
       });
 
-      console.log(`Crawl ${job.crawlJobId} finished:`, summary);
+      logger.info({ crawlJobId: job.crawlJobId, summary }, `Crawl ${job.crawlJobId} finished`);
     } catch (err: any) {
-      console.error(`Crawl ${job.crawlJobId} failed:`, err);
+      logger.error({ crawlJobId: job.crawlJobId, err }, `Crawl ${job.crawlJobId} failed`);
       const maxAttempts = bullmqJob?.opts?.attempts ?? 3;
       const attemptsMade = (bullmqJob?.attemptsMade ?? 0) + 1;
       const isFinalAttempt = attemptsMade >= maxAttempts;

@@ -1,6 +1,6 @@
 import { conversationRepository } from '../repositories/ConversationRepository';
 import { ConversationStatus, MessageRole, Conversation, Message } from '@prisma/client';
-import { LLMMessage } from '@ai-chatbot-platform/ai-core';
+import { LLMMessage } from '@ion-ai/ai-core';
 
 export class ConversationService {
   async createConversation(organizationId: string, deploymentId?: string, visitorId?: string) {

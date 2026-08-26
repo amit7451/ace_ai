@@ -1,5 +1,5 @@
 {
-  "name": "@ai-chatbot-platform/ai-core",
+  "name": "@ion-ai/ai-core",
   "version": "0.5.0",
   "description": "Provider-agnostic AI core engine for the AI Chatbot SaaS Platform. Components 1-5: LLM Provider Layer, Embedding Provider Layer, Vector Store Layer (Qdrant), Knowledge Chunking & Processing, RAG Retriever Engine.",
   "license": "UNLICENSED",

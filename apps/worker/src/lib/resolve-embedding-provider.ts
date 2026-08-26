@@ -12,6 +12,7 @@ const DEFAULT_EMBEDDING_MODELS: Record<string, string> = {
   testing: 'gemini-embedding-001',
   openai: 'text-embedding-3-small',
   cohere: 'embed-english-v3.0',
+  openrouter: 'openai/text-embedding-3-small',
   ollama: 'nomic-embed-text',
 };
 
@@ -73,10 +74,18 @@ export async function resolveEmbeddingProvider(
       apiKey = decryptApiKey(apiKeyRecord.encryptedKey);
     } else if (providerNameRaw === 'gemini') {
       apiKey = env.GEMINI_API_KEY || '';
+    } else if (providerNameRaw === 'openai') {
+      apiKey = env.OPENAI_API_KEY || '';
+    } else if (providerNameRaw === 'cohere') {
+      apiKey = env.COHERE_API_KEY || '';
+    } else if (providerNameRaw === 'openrouter') {
+      apiKey = env.OPENROUTER_API_KEY || '';
     }
 
     if (!apiKey) {
-      throw new Error(`API key for embedding provider '${providerNameRaw}' is not configured.`);
+      throw new Error(
+        `Missing API key for embedding provider '${providerNameRaw}'. Please configure an API key for ${providerNameRaw} in Settings -> Configured API Keys, or switch to Testing Tier.`
+      );
     }
   }
 

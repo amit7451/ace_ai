@@ -5,6 +5,7 @@ export interface ChatStreamChunk {
   content?: string;
   citations?: any[];
   error?: string;
+  structuredError?: any;
 }
 
 /**

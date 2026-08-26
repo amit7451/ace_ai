@@ -210,28 +210,43 @@ export default function PlaygroundPage() {
                   return newMsgs;
                 });
               } else if (data.type === 'error') {
-                const errObj =
-                  typeof data.error === 'object'
-                    ? data.error
-                    : {
-                        code: 'CHAT_STREAM_ERROR',
-                        category: 'UNKNOWN',
-                        message: String(data.error || 'Stream error'),
-                        keySource: 'SYSTEM_FREE_TIER',
-                        provider: 'system',
-                        actionableResolution: {
-                          type: 'RETRY_NOW',
-                          title: 'Stream Error',
-                          description: String(
-                            data.error || 'An error occurred during chat stream execution.'
-                          ),
-                          primaryButton: { label: 'Retry', action: 'RETRY_NOW' },
-                        },
-                      };
+                let errObj =
+                  data.structuredError || (typeof data.error === 'object' ? data.error : null);
+
+                if (!errObj) {
+                  let rawMsg = String(data.error || 'Stream error');
+                  try {
+                    if (rawMsg.startsWith('{')) {
+                      const parsed = JSON.parse(rawMsg);
+                      rawMsg = parsed.error?.message || parsed.message || rawMsg;
+                    }
+                  } catch (_) {}
+
+                  errObj = {
+                    code: 'CHAT_STREAM_ERROR',
+                    category: 'UNKNOWN',
+                    message: rawMsg,
+                    keySource: 'ORGANIZATION_CUSTOM_KEY',
+                    provider: 'ai-provider',
+                    actionableResolution: {
+                      type: 'NAVIGATE_TO_SETTINGS',
+                      title: 'Provider / Model Error',
+                      description: rawMsg,
+                      primaryButton: {
+                        label: 'Change Model in Settings',
+                        action: 'NAVIGATE_TO_SETTINGS',
+                        targetUrl: '/settings',
+                      },
+                      secondaryButton: { label: 'Retry', action: 'RETRY_NOW' },
+                    },
+                  };
+                }
 
                 showAIErrorModal(errObj, (action) => {
                   if (action === 'TRUNCATE_HISTORY') {
                     setMessages((prev) => prev.slice(-2));
+                  } else if (action === 'NAVIGATE_TO_SETTINGS') {
+                    window.location.href = '/settings';
                   }
                 });
 

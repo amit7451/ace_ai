@@ -34,9 +34,6 @@ importers:
 
   apps/api:
     dependencies:
-      '@ai-chatbot-platform/ai-core':
-        specifier: workspace:*
-        version: link:../../packages/ai-core
       '@fastify/cookie':
         specifier: ^9.3.1
         version: 9.4.0
@@ -52,6 +49,9 @@ importers:
       '@fastify/rate-limit':
         specifier: ^9.1.0
         version: 9.1.0
+      '@ion-ai/ai-core':
+        specifier: workspace:*
+        version: link:../../packages/ai-core
       '@ion-ai/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -177,7 +177,7 @@ importers:
 
   apps/worker:
     dependencies:
-      '@ai-chatbot-platform/ai-core':
+      '@ion-ai/ai-core':
         specifier: workspace:*
         version: link:../../packages/ai-core
       '@ion-ai/config':
@@ -270,7 +270,7 @@ importers:
 
   packages/chat:
     dependencies:
-      '@ai-chatbot-platform/ai-core':
+      '@ion-ai/ai-core':
         specifier: workspace:*
         version: link:../ai-core
       '@ion-ai/config':

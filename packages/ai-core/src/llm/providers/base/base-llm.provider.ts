@@ -6,6 +6,8 @@ import { estimateTokensFromMessages } from '../../utils/token-estimator.util';
 import { retryWithBackoff } from '../../utils/retry.util';
 import { LLMInvalidRequestError, LLMTimeoutError } from '../../errors/llm.errors';
 
+import type { KeySourceType, InstitutionSupportInfo } from '@ion-ai/contracts';
+
 /**
  * Shared behaviour for every concrete LLM provider: configuration handling,
  * timeout + retry orchestration, header construction, and token estimation.
@@ -16,6 +18,8 @@ import { LLMInvalidRequestError, LLMTimeoutError } from '../../errors/llm.errors
 export abstract class BaseLLMProvider implements ILLMProvider {
   abstract readonly name: string;
   readonly model: string;
+  readonly keySource?: KeySourceType;
+  readonly institutionSupport?: InstitutionSupportInfo;
 
   protected readonly config: LLMProviderConfig;
   protected readonly maxRetries: number;
@@ -28,11 +32,15 @@ export abstract class BaseLLMProvider implements ILLMProvider {
       throw new LLMInvalidRequestError(`Provider "${config.provider}" requires an apiKey.`, {
         provider: config.provider,
         model: config.model,
+        keySource: config.keySource,
+        institutionSupport: config.institutionSupport,
       });
     }
 
     this.config = config;
     this.model = config.model;
+    this.keySource = config.keySource;
+    this.institutionSupport = config.institutionSupport;
     this.maxRetries = config.maxRetries ?? 3;
     this.timeoutMs = config.timeoutMs ?? 30_000;
     this.retryBaseDelayMs = config.retryBaseDelayMs ?? 500;

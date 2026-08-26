@@ -25,17 +25,12 @@ export async function organizationController(fastify: FastifyInstance) {
       return { success: true, data: request.organization };
     });
 
-    orgRoutes.delete('/:orgId', async (request: FastifyRequest, reply: FastifyReply) => {
+    orgRoutes.delete('/:orgId', async (request: FastifyRequest) => {
       const orgId = (request.params as any).orgId || request.organization?.id;
-      const { confirmationName } = (request.body as { confirmationName?: string }) || {};
+      const body = (request.body as { confirmationName?: string }) || {};
+      const query = (request.query as { confirmationName?: string }) || {};
+      const confirmationName = body.confirmationName || query.confirmationName;
       await organizationService.deleteOrganization(request.user.sub, orgId, confirmationName);
-
-      const remaining = await organizationService
-        .getMyOrganizations(request.user.sub)
-        .catch(() => []);
-      if (remaining.length === 0) {
-        reply.clearCookie('access_token', { path: '/' });
-      }
 
       return {
         success: true,

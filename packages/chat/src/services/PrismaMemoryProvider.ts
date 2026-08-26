@@ -1,4 +1,4 @@
-import { IMemoryProvider, LLMMessage } from '@ai-chatbot-platform/ai-core';
+import { IMemoryProvider, LLMMessage } from '@ion-ai/ai-core';
 import { conversationService } from './ConversationService';
 
 export class PrismaMemoryProvider implements IMemoryProvider {

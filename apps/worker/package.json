@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-chatbot-platform/ai-core": "workspace:*",
+    "@ion-ai/ai-core": "workspace:*",
     "@ion-ai/config": "workspace:*",
     "@ion-ai/crawler": "workspace:*",
     "@ion-ai/database": "workspace:*",

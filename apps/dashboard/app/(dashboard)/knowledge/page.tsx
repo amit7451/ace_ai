@@ -5,6 +5,24 @@ import { API_BASE_URL } from '../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
+function cleanErrorMessage(raw?: string): string {
+  if (!raw) return 'Processing failed';
+  let msg = raw;
+  try {
+    if (msg.includes('{') && msg.includes('}')) {
+      const start = msg.indexOf('{');
+      const end = msg.lastIndexOf('}') + 1;
+      const jsonStr = msg.slice(start, end);
+      const parsed = JSON.parse(jsonStr);
+      const extracted = parsed.error?.message || parsed.message || parsed.error;
+      if (extracted) {
+        msg = msg.slice(0, start) + extracted;
+      }
+    }
+  } catch (_) {}
+  return msg;
+}
+
 export default function KnowledgePage() {
   const [sources, setSources] = useState<any[]>([]);
   const [crawlers, setCrawlers] = useState<any[]>([]);
@@ -12,6 +30,8 @@ export default function KnowledgePage() {
   const [uploading, setUploading] = useState(false);
   const [activeJobs, setActiveJobs] = useState<Record<string, any>>({});
   const [previewDoc, setPreviewDoc] = useState<{ id: string; name: string } | null>(null);
+  const [pageError, setPageError] = useState<string>('');
+  const [pageSuccess, setPageSuccess] = useState<string>('');
 
   const previousJobsRef = useRef<Record<string, any>>({});
   const initialFetchDone = useRef(false);
@@ -58,10 +78,12 @@ export default function KnowledgePage() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
+    setPageError('');
+    setPageSuccess('');
 
     // 1. Frontend validation: 5 MB limit per document
     if (file.size > MAX_FILE_SIZE) {
-      alert(
+      setPageError(
         `File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds maximum limit of 5 MB per document.`
       );
       e.target.value = '';
@@ -70,7 +92,7 @@ export default function KnowledgePage() {
 
     // 2. Frontend validation: 20 MB total organization storage quota
     if (totalUsedBytes + file.size > MAX_ORG_QUOTA) {
-      alert(
+      setPageError(
         `Storage quota exceeded. Current: ${(totalUsedBytes / (1024 * 1024)).toFixed(2)} MB / Max 20.00 MB total.`
       );
       e.target.value = '';
@@ -93,13 +115,14 @@ export default function KnowledgePage() {
 
       const json = await response.json();
       if (json.success) {
+        setPageSuccess(`Document "${file.name}" uploaded successfully. Processing embeddings...`);
         fetchSources();
       } else {
-        alert('Upload failed: ' + (json.error?.message || 'Error processing file upload'));
+        setPageError('Upload failed: ' + (json.error?.message || 'Error processing file upload'));
       }
     } catch (err: any) {
       console.error(err);
-      alert('Upload failed: ' + (err.message || 'Error contacting server'));
+      setPageError('Upload failed: ' + (err.message || 'Error contacting server'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -107,6 +130,8 @@ export default function KnowledgePage() {
   };
 
   const handleRetry = async (id: string) => {
+    setPageError('');
+    setPageSuccess('');
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/knowledge/${id}/retry`, {
         method: 'POST',
@@ -117,14 +142,14 @@ export default function KnowledgePage() {
       });
       const json = await response.json();
       if (json.success) {
-        alert('Retry initiated successfully.');
+        setPageSuccess('Document re-indexing initiated successfully.');
         fetchSources();
       } else {
-        alert('Failed to retry: ' + json.error?.message);
+        setPageError('Failed to retry: ' + (json.error?.message || 'Unknown error'));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to trigger retry.');
+      setPageError('Failed to trigger retry: ' + (err?.message || 'Server error'));
     }
   };
 
@@ -271,6 +296,30 @@ export default function KnowledgePage() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-12 font-mono text-zinc-200">
+      {/* Page Notifications */}
+      {pageError && (
+        <div className="p-3 border border-red-900/60 bg-red-950/30 text-red-400 text-xs flex justify-between items-center">
+          <span>! {pageError}</span>
+          <button
+            onClick={() => setPageError('')}
+            className="text-red-400 hover:text-red-200 font-bold ml-4"
+          >
+            [✕]
+          </button>
+        </div>
+      )}
+      {pageSuccess && (
+        <div className="p-3 border border-emerald-800/80 bg-emerald-950/40 text-emerald-300 text-xs flex justify-between items-center">
+          <span>✓ {pageSuccess}</span>
+          <button
+            onClick={() => setPageSuccess('')}
+            className="text-emerald-400 hover:text-emerald-200 font-bold ml-4"
+          >
+            [✕]
+          </button>
+        </div>
+      )}
+
       {/* Section 1: Documents */}
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
@@ -352,6 +401,9 @@ export default function KnowledgePage() {
                 const displayProgress = activeJob ? activeJob.progress : 0;
                 const isRunning = displayStatus === 'RUNNING' || displayStatus === 'PENDING';
                 const filename = extractFilename(s.document?.storageKey);
+                const rawFailureReason =
+                  activeJob?.failureReason || s.ingestionJobs?.[0]?.failureReason;
+                const failureMsg = cleanErrorMessage(rawFailureReason);
 
                 return (
                   <tr key={s.id} className="hover:bg-zinc-900/40 transition-colors group">
@@ -379,6 +431,13 @@ export default function KnowledgePage() {
                         >
                           {displayStatus}
                         </span>
+                        {rawFailureReason &&
+                          (displayStatus === 'FAILED' || displayStatus === 'RETRYING') && (
+                            <div className="mt-1 p-2 bg-red-950/40 border border-red-900/60 text-red-300 text-[10px] font-mono leading-relaxed rounded flex items-start gap-1.5 max-w-sm">
+                              <span className="text-red-400 font-bold shrink-0">⚠️</span>
+                              <span className="break-words">{failureMsg}</span>
+                            </div>
+                          )}
                         {isRunning && activeJob?.currentStage && (
                           <span className="text-[10px] text-zinc-500">
                             {activeJob.currentStage}

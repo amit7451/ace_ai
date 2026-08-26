@@ -1,3 +1,4 @@
+import type { InstitutionSupportInfo, KeySourceType } from '@ion-ai/contracts';
 import type { LLMToolDefinition } from './llm-message.types';
 
 export type LLMProviderName = 'openai' | 'anthropic' | 'gemini' | 'groq' | 'openrouter' | 'ollama';
@@ -15,6 +16,8 @@ export interface LLMProviderConfig {
   retryMaxDelayMs?: number;
   organization?: string;
   extraHeaders?: Record<string, string>;
+  keySource?: KeySourceType;
+  institutionSupport?: InstitutionSupportInfo;
 }
 
 export interface LLMCompletionOptions {

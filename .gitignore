@@ -120,6 +120,9 @@ dist
 # Turborepo
 .turbo
 
+# pnpm local store
+.pnpm-store/
+
 # Prisma
 packages/database/prisma/*.db
 packages/database/prisma/*.db-journal
@@ -127,5 +130,6 @@ packages/database/prisma/*.db-journal
 # IDEs
 .idea/
 .vscode/
+
+# Archives
 *.zip
-ion-ai.zip

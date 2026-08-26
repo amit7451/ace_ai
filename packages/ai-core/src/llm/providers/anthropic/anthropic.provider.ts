@@ -49,7 +49,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       });
 
       if (!response.ok) {
-        throw await mapHttpErrorResponse(response, this.name, this.model);
+        throw await mapHttpErrorResponse(response, this.name, this.model, this.keySource);
       }
 
       const data = (await response.json()) as AnthropicMessageResponse;
@@ -86,7 +86,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       });
 
       if (!res.ok) {
-        throw await mapHttpErrorResponse(res, this.name, this.model);
+        throw await mapHttpErrorResponse(res, this.name, this.model, this.keySource);
       }
       return res;
     });
@@ -94,6 +94,8 @@ export class AnthropicProvider extends BaseLLMProvider {
       throw new LLMInvalidRequestError('Anthropic stream response had no body.', {
         provider: this.name,
         model: this.model,
+        keySource: this.keySource,
+        institutionSupport: this.institutionSupport,
       });
     }
 

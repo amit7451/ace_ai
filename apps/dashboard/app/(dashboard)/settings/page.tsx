@@ -2,16 +2,22 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+import { DeleteOrganizationModal } from '../../components/DeleteOrganizationModal';
 
 export const dynamic = 'force-dynamic';
 
 export default function SettingsPage() {
+  const { institutions, refreshAuth } = useAuth();
   const [config, setConfig] = useState<any>(null);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isConfigSaved, setIsConfigSaved] = useState(false);
+  const [isKeySaved, setIsKeySaved] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Form State
   const [llmProvider, setLlmProvider] = useState('testing');
@@ -181,6 +187,25 @@ export default function SettingsPage() {
     setError('');
     setSuccess('');
 
+    // Case 2 validation: Verify selected providers have configured API keys
+    const missingLlm = !hasLlmKey;
+    const missingEmbedding = !hasEmbeddingKey;
+
+    if (missingLlm || missingEmbedding) {
+      const missingDetails: string[] = [];
+      if (missingLlm) missingDetails.push(`Chat Provider (${llmProvider.toUpperCase()})`);
+      if (missingEmbedding)
+        missingDetails.push(`Embedding Provider (${embeddingProvider.toUpperCase()})`);
+
+      setError(
+        `Cannot save configuration: Missing API key for ${missingDetails.join(
+          ' and '
+        )}. Please add the required API key(s) in the Configured API Keys section on the right before activating, or select Testing Tier.`
+      );
+      setSaving(false);
+      return;
+    }
+
     try {
       const orgId = localStorage.getItem('organizationId');
       const res = await fetch(`${API_BASE_URL}/api/v1/configuration`, {
@@ -212,11 +237,13 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.success) {
         setSuccess('Configuration saved successfully.');
+        setIsConfigSaved(true);
+        setTimeout(() => setIsConfigSaved(false), 3000);
       } else {
         setError(data.error?.message || 'Failed to save configuration.');
       }
-    } catch (err) {
-      setError('An unexpected error occurred.');
+    } catch (err: any) {
+      setError(err?.message || 'An unexpected error occurred.');
     } finally {
       setSaving(false);
     }
@@ -245,23 +272,34 @@ export default function SettingsPage() {
 
       const data = await res.json();
       if (data.success) {
-        setSuccess('API key saved successfully.');
+        const shifted = data.data;
+        const provLabel =
+          allKeyProviders.find((p) => p.id === newKeyProvider)?.name ||
+          newKeyProvider.toUpperCase();
+        setSuccess(
+          `✓ API key for ${provLabel} saved successfully! Active providers automatically shifted to ${
+            shifted?.shiftedLlmProvider ? `Chat (${shifted.shiftedLlmProvider.toUpperCase()})` : ''
+          }${shifted?.shiftedEmbeddingProvider ? ` and Embedding (${shifted.shiftedEmbeddingProvider.toUpperCase()})` : ''}.`
+        );
+        setIsKeySaved(true);
+        setTimeout(() => setIsKeySaved(false), 3000);
         setNewKeyValue('');
-        fetchData();
-        fetchLlmModels(llmProvider, llmModel);
-        fetchEmbeddingModels(embeddingProvider, embeddingModel);
+        await fetchData();
       } else {
         setError(data.error?.message || 'Failed to save API key.');
       }
-    } catch (err) {
-      setError('An unexpected error occurred while saving API key.');
+    } catch (err: any) {
+      setError(err?.message || 'An unexpected error occurred while saving API key.');
     } finally {
       setSavingKey(false);
     }
   };
 
   const handleDeleteKey = async (provider: string) => {
-    if (!window.confirm(`Are you sure you want to delete the API key for ${provider}?`)) return;
+    if (
+      !window.confirm(`Are you sure you want to delete the API key for ${provider.toUpperCase()}?`)
+    )
+      return;
     try {
       const orgId = localStorage.getItem('organizationId');
       const res = await fetch(`${API_BASE_URL}/api/v1/configuration/apikeys?provider=${provider}`, {
@@ -273,69 +311,50 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setSuccess('API key deleted successfully.');
-        fetchData();
-        fetchLlmModels(llmProvider, llmModel);
-        fetchEmbeddingModels(embeddingProvider, embeddingModel);
+        setSuccess(
+          `✓ API key for ${provider.toUpperCase()} deleted. Active provider reverted safely.`
+        );
+        await fetchData();
       } else {
         setError(data.error?.message || 'Failed to delete API key.');
       }
-    } catch (err) {
-      setError('An unexpected error occurred while deleting API key.');
+    } catch (err: any) {
+      setError(err?.message || 'An unexpected error occurred while deleting API key.');
     }
   };
 
-  const handleDeleteInstitutionAccount = async () => {
+  const handleDeleteInstitutionAccount = () => {
     const orgId = localStorage.getItem('organizationId');
     if (!orgId) return;
-
-    const confirmed = window.confirm(
-      'Are you sure you want to permanently delete this institution account?\n\nThis will permanently remove the institution, all configurations, members, knowledge bases, widgets, and database records from PostgreSQL. THIS CANNOT BE UNDONE.'
-    );
-    if (!confirmed) return;
-
-    setDeletingOrg(true);
-    setError('');
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/organizations/${orgId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-organization-id': orgId,
-        },
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        localStorage.removeItem('organizationId');
-        window.location.href = '/institution';
-      } else {
-        setError(data.error?.message || 'Failed to delete institution account');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred while deleting institution account');
-    } finally {
-      setDeletingOrg(false);
-    }
+    setShowDeleteModal(true);
   };
 
   const llmProvidersList = [
-    { id: 'testing', name: 'Testing Tier (Playground Only)' },
+    { id: 'testing', name: 'Testing Tier (Playground Only - System Key)' },
     { id: 'gemini', name: 'Google Gemini' },
     { id: 'openai', name: 'OpenAI' },
     { id: 'anthropic', name: 'Anthropic' },
-    { id: 'groq', name: 'Groq' },
+    { id: 'groq', name: 'Groq (Ultra-Fast)' },
     { id: 'openrouter', name: 'OpenRouter' },
-    { id: 'ollama', name: 'Ollama' },
+    { id: 'ollama', name: 'Ollama (Local)' },
   ];
 
   const embeddingProvidersList = [
-    { id: 'testing', name: 'Testing Tier (Playground Only)' },
+    { id: 'testing', name: 'Testing Tier (Playground Only - System Key)' },
     { id: 'gemini', name: 'Google Gemini' },
     { id: 'openai', name: 'OpenAI' },
     { id: 'cohere', name: 'Cohere' },
-    { id: 'ollama', name: 'Ollama' },
+    { id: 'openrouter', name: 'OpenRouter (Embeddings)' },
+    { id: 'ollama', name: 'Ollama (Local)' },
+  ];
+
+  const allKeyProviders = [
+    { id: 'openai', name: 'OpenAI (Chat & Embeddings)' },
+    { id: 'gemini', name: 'Google Gemini (Chat & Embeddings)' },
+    { id: 'anthropic', name: 'Anthropic (Chat Only)' },
+    { id: 'groq', name: 'Groq (Ultra-Fast Chat Only)' },
+    { id: 'openrouter', name: 'OpenRouter (Multi-Model Chat & Embeddings)' },
+    { id: 'cohere', name: 'Cohere (Embeddings Only)' },
   ];
 
   const hasLlmKey =
@@ -419,14 +438,20 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 {llmProvider === 'testing' ? (
-                  <p className="text-[10px] text-yellow-400 mt-1">
-                    Testing Tier active: Uses global system key. (Live hosted widgets require a
-                    custom production key).
+                  <p className="text-[10px] text-emerald-400 mt-1">
+                    ✓ Testing Tier active: Powered by global system keys (Playground access
+                    enabled).
                   </p>
                 ) : !hasLlmKey ? (
-                  <p className="text-[10px] text-red-400 mt-1 font-bold">
-                    Warning: Missing API key for {llmProvider}.
-                  </p>
+                  <div className="p-2.5 mt-2 border border-amber-900/60 bg-amber-950/30 text-amber-300 text-[11px] font-mono tracking-wide flex items-start gap-2">
+                    <span>⚠️</span>
+                    <div>
+                      <strong>API Key Missing:</strong> You selected{' '}
+                      <strong>{llmProvider.toUpperCase()}</strong> for Chat, but no API key is
+                      configured. Please add your key in the <em>Configured API Keys</em> section on
+                      the right, or switch to <strong>Testing Tier</strong>.
+                    </div>
+                  </div>
                 ) : null}
               </div>
 
@@ -489,13 +514,19 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 {embeddingProvider === 'testing' ? (
-                  <p className="text-[10px] text-yellow-400 mt-1">
-                    Testing Tier active: Uses global system key for vector embeddings.
+                  <p className="text-[10px] text-emerald-400 mt-1">
+                    ✓ Testing Tier active: Powered by global system keys for vector embeddings.
                   </p>
                 ) : !hasEmbeddingKey ? (
-                  <p className="text-[10px] text-red-400 mt-1 font-bold">
-                    Warning: Missing API key for embedding provider {embeddingProvider}.
-                  </p>
+                  <div className="p-2.5 mt-2 border border-amber-900/60 bg-amber-950/30 text-amber-300 text-[11px] font-mono tracking-wide flex items-start gap-2">
+                    <span>⚠️</span>
+                    <div>
+                      <strong>API Key Missing:</strong> You selected{' '}
+                      <strong>{embeddingProvider.toUpperCase()}</strong> for Embeddings, but no API
+                      key is configured. Please add your key in the <em>Configured API Keys</em>{' '}
+                      section on the right, or switch to <strong>Testing Tier</strong>.
+                    </div>
+                  </div>
                 ) : null}
               </div>
 
@@ -620,9 +651,17 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2.5 modbit-btn-primary text-xs uppercase tracking-wider disabled:opacity-50"
+                className={`px-6 py-2.5 text-xs uppercase tracking-wider font-bold transition-all duration-300 ${
+                  isConfigSaved
+                    ? 'bg-emerald-600 border border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] cursor-default'
+                    : 'modbit-btn-primary disabled:opacity-50'
+                }`}
               >
-                {saving ? '[ SAVING... ]' : '[ SAVE CONFIGURATION ]'}
+                {saving
+                  ? '[ SAVING... ]'
+                  : isConfigSaved
+                    ? '✓ [ CONFIGURATION SAVED ]'
+                    : '[ SAVE CONFIGURATION ]'}
               </button>
             </div>
           </form>
@@ -683,18 +722,11 @@ export default function SettingsPage() {
                   onChange={(e) => setNewKeyProvider(e.target.value)}
                   className="w-full px-3.5 py-2.5 modbit-input text-xs bg-zinc-950"
                 >
-                  {Array.from(
-                    new Set(
-                      [...llmProvidersList, ...embeddingProvidersList].map((p) => JSON.stringify(p))
-                    )
-                  )
-                    .map((s) => JSON.parse(s))
-                    .filter((p: any) => p.id !== 'testing')
-                    .map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
+                  {allKeyProviders.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -713,9 +745,17 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={savingKey}
-                className="w-full py-2.5 modbit-btn-secondary text-xs uppercase tracking-wider disabled:opacity-50"
+                className={`w-full py-2.5 text-xs uppercase tracking-wider font-bold transition-all duration-300 ${
+                  isKeySaved
+                    ? 'bg-emerald-600 border border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] cursor-default'
+                    : 'modbit-btn-secondary disabled:opacity-50'
+                }`}
               >
-                {savingKey ? '[ SAVING KEY... ]' : '[ SAVE API KEY ]'}
+                {savingKey
+                  ? '[ SAVING KEY... ]'
+                  : isKeySaved
+                    ? '✓ [ API KEY SAVED ]'
+                    : '[ SAVE API KEY ]'}
               </button>
             </form>
           </div>
@@ -732,14 +772,37 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={handleDeleteInstitutionAccount}
-              disabled={deletingOrg}
-              className="w-full py-2.5 text-xs text-red-400 hover:text-red-300 border border-red-900/80 hover:bg-red-950/60 uppercase tracking-wider transition-colors disabled:opacity-50"
+              className="w-full py-2.5 text-xs text-red-400 hover:text-red-300 border border-red-900/80 hover:bg-red-950/60 uppercase tracking-wider transition-colors"
             >
-              {deletingOrg ? '[ DELETING WORKSPACE... ]' : '[ DELETE INSTITUTION WORKSPACE ]'}
+              [ DELETE INSTITUTION WORKSPACE ]
             </button>
           </div>
         </div>
       </div>
+
+      {showDeleteModal && (
+        <DeleteOrganizationModal
+          isOpen={showDeleteModal}
+          organizationId={
+            typeof window !== 'undefined' ? localStorage.getItem('organizationId') || '' : ''
+          }
+          organizationName={
+            institutions?.find(
+              (i) =>
+                i.id ===
+                (typeof window !== 'undefined' ? localStorage.getItem('organizationId') : null)
+            )?.name ||
+            institutionName ||
+            'Workspace'
+          }
+          onClose={() => setShowDeleteModal(false)}
+          onSuccess={async () => {
+            setShowDeleteModal(false);
+            await refreshAuth();
+            window.location.href = '/institution';
+          }}
+        />
+      )}
     </div>
   );
 }

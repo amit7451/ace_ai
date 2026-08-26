@@ -196,6 +196,7 @@ function RegisterForm() {
     { id: 'gemini', name: 'Google Gemini Embeddings' },
     { id: 'openai', name: 'OpenAI text-embedding-3' },
     { id: 'cohere', name: 'Cohere Embeddings' },
+    { id: 'openrouter', name: 'OpenRouter Embeddings' },
     { id: 'ollama', name: 'Ollama Embeddings' },
   ];
 

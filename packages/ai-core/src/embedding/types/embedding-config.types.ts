@@ -7,7 +7,7 @@
  * with a throwing implementation. Extend this union (and the schema/factory)
  * the day one of them ships an embeddings API.
  */
-export type EmbeddingProviderName = 'openai' | 'gemini' | 'cohere' | 'ollama';
+export type EmbeddingProviderName = 'openai' | 'gemini' | 'cohere' | 'openrouter' | 'ollama';
 
 /**
  * Embedding models are trained asymmetrically: the vector for "the thing
