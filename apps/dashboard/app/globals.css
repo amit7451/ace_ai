@@ -34,8 +34,15 @@ body {
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
 }
 
 /* Minimalist retro card styles - sharp borders, minimal colors */
@@ -132,9 +139,11 @@ body {
   text-decoration: none;
   transition: color 0.2s ease;
 }
+
 .scroll-arrow-btn:hover {
   color: #71717a;
 }
+
 .scroll-arrow-ring {
   position: absolute;
   inset: 0;
@@ -142,18 +151,37 @@ body {
   border-radius: 50%;
   animation: ring-pulse 2.4s ease-in-out infinite;
 }
+
 @keyframes ring-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.12); }
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.12);
+  }
 }
+
 .scroll-arrow-icon {
   position: relative;
   z-index: 1;
   animation: arrow-bob 2.4s ease-in-out infinite;
 }
+
 @keyframes arrow-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(4px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(4px);
+  }
 }
 
 /* ── How It Works section — full viewport page ─────────── */
@@ -285,6 +313,7 @@ body {
   opacity: 0;
   transition: opacity 0.25s ease;
 }
+
 .step-card:hover::before {
   opacity: 1;
 }
@@ -350,12 +379,15 @@ body {
 .value-card::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, #3f3f46 50%, transparent);
   opacity: 0;
   transition: opacity 0.25s ease;
 }
+
 .value-card:hover::before {
   opacity: 1;
 }

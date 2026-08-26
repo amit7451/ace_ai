@@ -29,9 +29,6 @@ COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
 RUN pnpm --filter @ion-ai/database db:generate
 RUN pnpm --filter @ion-ai/api... build
 
-# Prune devDependencies for a lean production footprint
-RUN pnpm prune --prod --no-optional
-
 # ===================================================
 # Stage 3: Minimal Production Runner
 # ===================================================
@@ -46,12 +43,8 @@ ENV PORT=3001
 RUN addgroup --system --gid 10001 nodejs && \
     adduser --system --uid 10001 ionuser
 
-# Copy production node_modules and built packages
-COPY --from=builder --chown=ionuser:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=ionuser:nodejs /app/packages ./packages
-COPY --from=builder --chown=ionuser:nodejs /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=ionuser:nodejs /app/apps/api/package.json ./apps/api/package.json
-COPY --from=builder --chown=ionuser:nodejs /app/package.json ./package.json
+# Copy full built workspace including all package node_modules
+COPY --from=builder --chown=ionuser:nodejs /app ./
 
 USER ionuser
 

@@ -29,9 +29,6 @@ COPY --from=pruner /app/tsconfig.base.json ./tsconfig.base.json
 RUN pnpm --filter @ion-ai/database db:generate
 RUN pnpm --filter @ion-ai/worker... build
 
-# Prune devDependencies
-RUN pnpm prune --prod --no-optional
-
 # ===================================================
 # Stage 3: Production Runner with Headless Chromium
 # ===================================================
@@ -57,12 +54,8 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 RUN addgroup --system --gid 10001 nodejs && \
     adduser --system --uid 10001 workeruser
 
-# Copy production node_modules and built packages
-COPY --from=builder --chown=workeruser:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=workeruser:nodejs /app/packages ./packages
-COPY --from=builder --chown=workeruser:nodejs /app/apps/worker/dist ./apps/worker/dist
-COPY --from=builder --chown=workeruser:nodejs /app/apps/worker/package.json ./apps/worker/package.json
-COPY --from=builder --chown=workeruser:nodejs /app/package.json ./package.json
+# Copy full built workspace
+COPY --from=builder --chown=workeruser:nodejs /app ./
 
 USER workeruser
 
