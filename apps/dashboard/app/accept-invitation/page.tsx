@@ -82,7 +82,7 @@ function AcceptInvitationContent() {
         }
         await refreshAuth();
         setTimeout(() => {
-          router.push('/playground');
+          router.push('/dashboard');
         }, 1200);
       } else {
         throw new Error(data.error?.message || data.error || 'Failed to accept invitation');

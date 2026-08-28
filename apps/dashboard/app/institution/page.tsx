@@ -41,7 +41,7 @@ function InstitutionContent() {
       return;
     }
     localStorage.setItem('organizationId', id);
-    router.push('/playground');
+    router.push('/dashboard');
   };
 
   const handleCreateSuccess = async (newOrg: { id: string; name: string; slug?: string }) => {
@@ -49,7 +49,7 @@ function InstitutionContent() {
     setSuccessMsg(`Institution "${newOrg.name}" created successfully.`);
     await refreshAuth();
     localStorage.setItem('organizationId', newOrg.id);
-    router.push('/playground');
+    router.push('/dashboard');
   };
 
   if (authLoading) {

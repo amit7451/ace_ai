@@ -25,6 +25,12 @@ export async function organizationController(fastify: FastifyInstance) {
       return { success: true, data: request.organization };
     });
 
+    orgRoutes.get('/:orgId/summary', async (request: FastifyRequest) => {
+      const orgId = (request.params as any).orgId || request.organization?.id;
+      const summary = await organizationService.getOrganizationSummary(orgId, request.user.sub);
+      return { success: true, data: summary };
+    });
+
     orgRoutes.delete('/:orgId', async (request: FastifyRequest) => {
       const orgId = (request.params as any).orgId || request.organization?.id;
       const body = (request.body as { confirmationName?: string }) || {};

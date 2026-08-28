@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 // Protected dashboard routes requiring active user authentication
 const PROTECTED_PREFIXES = [
+  '/dashboard',
   '/playground',
   '/knowledge',
   '/crawlers',

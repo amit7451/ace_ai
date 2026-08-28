@@ -56,7 +56,7 @@ export default function Home() {
               <>
                 {isAuthenticated ? (
                   <Link
-                    href="/playground"
+                    href="/dashboard"
                     className="inline-block px-10 py-4 modbit-btn-primary text-sm tracking-[0.2em] corner-border uppercase"
                   >
                     [ OPEN DASHBOARD ]

@@ -50,6 +50,7 @@ export default function Sidebar() {
   if (isAuthPage || isWidgetPage) return null;
 
   const navItems = [
+    { name: 'Dashboard', href: '/dashboard' },
     { name: 'Playground', href: '/playground' },
     { name: 'Knowledge Base', href: '/knowledge' },
     { name: 'Crawlers', href: '/crawlers' },
@@ -65,7 +66,7 @@ export default function Sidebar() {
     <aside className="w-64 bg-[#0c0c0f] text-zinc-200 border-r border-zinc-800 flex flex-col hidden sm:flex font-mono select-none">
       {/* Brand Header */}
       <div className="p-5 border-b border-zinc-800 space-y-3">
-        <Link href="/" className="flex items-center justify-between group">
+        <Link href="/dashboard" className="flex items-center justify-between group">
           <div className="flex items-center gap-2.5">
             <Image
               src="/modbit.webp"
@@ -104,7 +105,9 @@ export default function Sidebar() {
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== '/playground' && pathname.startsWith(item.href));
+            (item.href !== '/dashboard' &&
+              item.href !== '/playground' &&
+              pathname.startsWith(item.href));
           return (
             <Link
               key={item.name}

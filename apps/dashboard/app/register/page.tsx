@@ -173,12 +173,12 @@ function RegisterForm() {
       await refreshAuth();
 
       // Open Institution Dashboard
-      router.push('/playground');
+      router.push('/dashboard');
     } catch (err: any) {
       if (activeOrgId) {
         localStorage.setItem('organizationId', activeOrgId);
       }
-      router.push('/playground');
+      router.push('/dashboard');
     } finally {
       setLoading(false);
     }
